@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Soccer Scouting",
+      "hasCanvas": false,
+      "bodyTextLen": 6764,
+      "bodyTextHash": "4092588bfad1a257d27dbca79ebc381f4957590a59d1484dd36b80872b5167b8",
+      "bodyTextPrefix": "SOCCER SCOUTING From the pitch to the club Method Positions Pric",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Soccer Scouting",
+      "hasCanvas": false,
+      "bodyTextLen": 6703,
+      "bodyTextHash": "6ee83d8584a7a118f6daacd2d65d0d1c40a83dc99323e84ee65aab0f0852cf04",
+      "bodyTextPrefix": "SOCCER SCOUTING EN Sign in From the pitch to the club Live netwo",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json"
+}

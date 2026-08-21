@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "KAVOSH",
+      "hasCanvas": false,
+      "bodyTextLen": 7165,
+      "bodyTextHash": "cb7d53759ac65bf4180dfaaee6d2cc2e930ea7bd5a56bd0f579df64bdd358266",
+      "bodyTextPrefix": "KAVOSH The method Choose a position Plans The desk EN Sign in De",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "KAVOSH",
+      "hasCanvas": false,
+      "bodyTextLen": 7121,
+      "bodyTextHash": "0d62dfa5245e676e302ee28576a4e65631a01b48eeb45f89d9901f0af17948a5",
+      "bodyTextPrefix": "KAVOSH EN Sign in Desk is open·AFC region · player, scout, club ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

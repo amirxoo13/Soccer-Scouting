@@ -1,0 +1,29 @@
+import { cn } from "@/lib/utils";
+
+export function BrandMark({
+  className,
+  size = 32,
+}: {
+  className?: string;
+  size?: number;
+}) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 32 32"
+      width={size}
+      height={size}
+      className={cn("shrink-0", className)}
+      role="img"
+      aria-label="Soccer Scouting"
+    >
+      <rect width="32" height="32" rx="7" fill="#0b0d0c" />
+      <rect x="15" y="2" width="2" height="5" fill="#c5d0c8" />
+      <rect x="15" y="25" width="2" height="5" fill="#c5d0c8" />
+      <rect x="2" y="15" width="5" height="2" fill="#c5d0c8" />
+      <rect x="25" y="15" width="5" height="2" fill="#c5d0c8" />
+      <circle cx="16" cy="16" r="8" fill="#c5d0c8" />
+      <polygon points="16,10.4 20.75,13.85 18.95,19.4 13.05,19.4 11.25,13.85" fill="#0b0d0c" />
+    </svg>
+  );
+}

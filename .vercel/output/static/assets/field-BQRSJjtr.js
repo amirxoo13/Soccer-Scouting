@@ -1,0 +1,1 @@
+import{p as e}from"./preload-helper-EdkTk3Og.js";import{n as t}from"./utils-iI4AMMMB.js";var n=e();function r({label:e,children:r,className:i}){return(0,n.jsxs)(`label`,{className:t(`grid gap-1.5`,i),children:[(0,n.jsx)(`span`,{className:`text-xs font-medium text-muted-foreground`,children:e}),r]})}export{r as t};

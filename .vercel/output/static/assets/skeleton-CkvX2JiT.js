@@ -1,0 +1,1 @@
+import{p as e}from"./preload-helper-EdkTk3Og.js";import{n as t}from"./utils-iI4AMMMB.js";var n=e();function r({className:e}){return(0,n.jsx)(`div`,{className:t(`animate-pulse rounded-md bg-muted`,e)})}export{r as t};

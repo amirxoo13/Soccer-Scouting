@@ -1,0 +1,1 @@
+var e=[{id:`youth`,usd:0,audience:`player`,ageMin:16,ageMax:19},{id:`player_u24`,usd:200,audience:`player`,ageMin:20,ageMax:24},{id:`player_senior`,usd:400,audience:`player`,ageMin:25},{id:`desk`,usd:1e3,audience:`desk`}];function t(t){return e.find(e=>e.id===t)}export{t as n,e as t};
