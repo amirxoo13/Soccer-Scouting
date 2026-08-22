@@ -240,6 +240,8 @@ export const en = {
     google: "Continue with Google",
     x: "Continue with X",
     error: "Sign-in failed. Try again.",
+    exists: "This email already has an account. Signing you in.",
+    invalid: "Email or password is incorrect.",
   },
   onboarding: {
     title: "Choose your role",

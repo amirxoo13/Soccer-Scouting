@@ -52,10 +52,27 @@ function Login() {
           password,
           name: name || email.split("@")[0],
         });
-        if (err) throw new Error(err.message);
+        if (err) {
+          const msg = (err.message || "").toLowerCase();
+          if (msg.includes("already") || msg.includes("exists")) {
+            const signed = await authClient.signIn.email({ email, password });
+            if (signed.error) {
+              setMode("in");
+              throw new Error(t("auth.exists"));
+            }
+          } else {
+            throw new Error(err.message);
+          }
+        }
       } else {
         const { error: err } = await authClient.signIn.email({ email, password });
-        if (err) throw new Error(err.message);
+        if (err) {
+          const msg = (err.message || "").toLowerCase();
+          if (msg.includes("invalid") || msg.includes("password") || msg.includes("credential")) {
+            throw new Error(t("auth.invalid"));
+          }
+          throw new Error(err.message);
+        }
       }
       setDone(true);
     } catch (err) {
