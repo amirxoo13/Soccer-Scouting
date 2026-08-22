@@ -83,22 +83,28 @@ async function processJob(job: {
 
   let streamUrl = "";
   let quality: string | null = null;
-  try {
-    const extracted = await extractStreamUrl(job.video_url);
-    streamUrl = extracted.url;
-    quality = extracted.quality;
-    await sql`
-      update video_analysis_jobs set stream_url = ${streamUrl}, updated_at = now() where id = ${job.id}
-    `;
-  } catch (err) {
-    const message = err instanceof ExtractionError ? err.message : `extraction: ${String(err)}`;
-    console.error("[analysis] extraction fallback to page URL", job.id, message);
+  const skipYtdlp = Boolean(process.env.VERCEL);
+  if (skipYtdlp) {
     streamUrl = job.video_url;
-    quality = "source-url";
-    await sql`
-      update video_analysis_jobs set stream_url = ${streamUrl}, last_error = ${message}, updated_at = now()
-      where id = ${job.id}
-    `;
+    quality = "frame";
+  } else {
+    try {
+      const extracted = await extractStreamUrl(job.video_url);
+      streamUrl = extracted.url;
+      quality = extracted.quality;
+      await sql`
+        update video_analysis_jobs set stream_url = ${streamUrl}, updated_at = now() where id = ${job.id}
+      `;
+    } catch (err) {
+      const message = err instanceof ExtractionError ? err.message : `extraction: ${String(err)}`;
+      console.error("[analysis] extraction fallback to page URL", job.id, message);
+      streamUrl = job.video_url;
+      quality = "source-url";
+      await sql`
+        update video_analysis_jobs set stream_url = ${streamUrl}, last_error = ${message}, updated_at = now()
+        where id = ${job.id}
+      `;
+    }
   }
 
   try {
