@@ -1,5 +1,9 @@
-export const OWNER_EMAIL = "amir.behi2333@gmail.com";
+export const OWNER_EMAILS = [
+  "amir.behi2333@gmail.com",
+  "amirxo6229@gmail.com",
+];
 
 export function isOwnerEmail(email: string | null | undefined) {
-  return (email || "").trim().toLowerCase() === OWNER_EMAIL;
+  const n = (email || "").trim().toLowerCase();
+  return OWNER_EMAILS.includes(n);
 }
