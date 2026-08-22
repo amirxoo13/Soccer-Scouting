@@ -8,6 +8,8 @@ export const getMe = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<MeState> => {
     const sql = await getSql();
+    const { ensureOwnerPrivileges } = await import("./owner");
+    await ensureOwnerPrivileges(sql, context.userId);
     const [userRow] = await sql<Record<string, unknown>>`
       select * from platform_users where user_id = ${context.userId}
     `;
@@ -52,6 +54,8 @@ export const completeOnboarding = createServerFn({ method: "POST" })
   .validator((input: { role: UserRole; displayName?: string; orgName?: string; orgRole?: string }) => input)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
+    const { ensureOwnerPrivileges } = await import("./owner");
+    await ensureOwnerPrivileges(sql, context.userId);
     const [existing] = await sql<{ user_id: string }>`
       select user_id from platform_users where user_id = ${context.userId}
     `;

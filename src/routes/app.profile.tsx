@@ -3,20 +3,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Field } from "@/components/field";
+import { VideoEmbed } from "@/components/video-embed";
+import { AnalysisPanel } from "@/components/analysis-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { COUNTRIES, FEET, LEVELS, POSITIONS, VIDEO_CATEGORIES } from "@/lib/football";
 import { useI18n } from "@/lib/i18n";
 import { getMyProfile, saveMyProfile, submitMyProfile, type ProfilePayload } from "@/lib/server/player";
 import { getAccess, submitYouthVerification } from "@/lib/server/billing";
+import { importTransfermarkt, searchTransfermarkt, type TmSearchHit } from "@/lib/server/transfermarkt";
+import { parseVideoUrl } from "@/lib/video-embed";
 import type { ClubStint } from "@/lib/types";
 
 export const Route = createFileRoute("/app/profile")({ component: ProfileEditor });
 
-type VideoDraft = { youtubeUrl: string; title: string; category: string };
+type VideoDraft = { id?: number; youtubeUrl: string; title: string; category: string };
 
 function ProfileEditor() {
   const { t, locale } = useI18n();
@@ -26,6 +31,8 @@ function ProfileEditor() {
   const [idDoc, setIdDoc] = useState("");
   const [selfie, setSelfie] = useState("");
   const [youthVideo, setYouthVideo] = useState("");
+  const [tmQ, setTmQ] = useState("");
+  const [tmHits, setTmHits] = useState<TmSearchHit[]>([]);
   const youth = useMutation({
     mutationFn: () =>
       submitYouthVerification({ data: { idDocUrl: idDoc, selfieUrl: selfie, videoUrl: youthVideo || null } }),
@@ -69,6 +76,7 @@ function ProfileEditor() {
     setHistory(p.clubHistory);
     setVideos(
       p.videos.map((v) => ({
+        id: v.id,
         youtubeUrl: v.youtubeUrl,
         title: v.title ?? "",
         category: v.category ?? "other",
@@ -100,8 +108,46 @@ function ProfileEditor() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  const tmSearch = useMutation({
+    mutationFn: () => searchTransfermarkt({ data: { q: tmQ } }),
+    onSuccess: (hits) => setTmHits(hits),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const tmImport = useMutation({
+    mutationFn: (hit: TmSearchHit) => importTransfermarkt({ data: { id: hit.id, name: hit.name } }),
+    onSuccess: (imp) => {
+      setForm((f) =>
+        f
+          ? {
+              ...f,
+              firstName: imp.firstName || f.firstName,
+              lastName: imp.lastName || f.lastName,
+              dob: imp.dob ?? f.dob,
+              city: imp.city ?? f.city,
+              nationality: imp.nationality ?? f.nationality,
+              country: imp.country ?? f.country,
+              heightCm: imp.heightCm ?? f.heightCm,
+              preferredFoot: imp.preferredFoot ?? f.preferredFoot,
+              primaryPosition: imp.primaryPosition ?? f.primaryPosition,
+              currentClub: imp.currentClub ?? f.currentClub,
+              playingLevel: imp.playingLevel,
+            }
+          : f,
+      );
+      if (imp.clubHistory.length) setHistory(imp.clubHistory);
+      toast.success(t("profileForm.tmImported"));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
-  if (!form) return null;
+  if (mine.isPending) return <Skeleton className="h-40 w-full" />;
+  if (!form) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        <Link to="/onboarding">{t("onboarding.continue")}</Link>
+      </p>
+    );
+  }
   const locked = mine.data?.status === "pending";
   const set = (k: keyof ProfilePayload, v: unknown) => setForm((f) => (f ? { ...f, [k]: v } : f));
 
@@ -142,6 +188,11 @@ function ProfileEditor() {
               <Field label={t("youth.video")} className="sm:col-span-2">
                 <Input value={youthVideo} onChange={(e) => setYouthVideo(e.target.value)} />
               </Field>
+              {youthVideo && parseVideoUrl(youthVideo) && (
+                <div className="sm:col-span-2">
+                  <VideoEmbed url={youthVideo} />
+                </div>
+              )}
               <Button disabled={youth.isPending} onClick={() => youth.mutate()}>
                 {t("youth.send")}
               </Button>
@@ -166,6 +217,42 @@ function ProfileEditor() {
           )}
         </div>
       )}
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <h2 className="font-display text-2xl">{t("profileForm.tmTitle")}</h2>
+        <p className="mt-2 text-sm text-muted-foreground">{t("profileForm.tmHelp")}</p>
+        <form
+          className="mt-4 flex flex-col gap-2 sm:flex-row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            tmSearch.mutate();
+          }}
+        >
+          <Input
+            value={tmQ}
+            onChange={(e) => setTmQ(e.target.value)}
+            placeholder={t("profileForm.tmPlaceholder")}
+          />
+          <Button type="submit" disabled={tmSearch.isPending || tmQ.trim().length < 2}>
+            {t("profileForm.tmSearch")}
+          </Button>
+        </form>
+        <div className="mt-3 grid gap-2">
+          {tmHits.map((hit) => (
+            <div key={hit.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2">
+              <div>
+                <p className="text-sm font-medium">{hit.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {[hit.position, hit.club, hit.nationality, hit.source].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              <Button size="sm" variant="outline" disabled={tmImport.isPending} onClick={() => tmImport.mutate(hit)}>
+                {t("profileForm.tmImport")}
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <fieldset disabled={locked} className="grid gap-8">
         <section className="grid gap-4">
@@ -228,6 +315,32 @@ function ProfileEditor() {
                 onChange={(e) => set("secondaryPositions", e.target.value)}
               />
             </Field>
+            <Field label={t("player.foot")}>
+              <Select
+                value={form.preferredFoot ?? ""}
+                onChange={(e) => set("preferredFoot", e.target.value || null)}
+              >
+                <option value="">{t("discover.any")}</option>
+                {FEET.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c[locale]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t("discover.level")}>
+              <Select
+                value={form.playingLevel ?? ""}
+                onChange={(e) => set("playingLevel", e.target.value || null)}
+              >
+                <option value="">{t("discover.any")}</option>
+                {LEVELS.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c[locale]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Field label={t("profileForm.height")}>
               <Input
                 inputMode="numeric"
@@ -242,35 +355,6 @@ function ProfileEditor() {
                 onChange={(e) => set("weightKg", e.target.value ? Number(e.target.value) : null)}
               />
             </Field>
-            <Field label={t("discover.foot")}>
-              <Select
-                value={form.preferredFoot ?? ""}
-                onChange={(e) => set("preferredFoot", (e.target.value || null) as ProfilePayload["preferredFoot"])}
-              >
-                <option value="">{t("discover.any")}</option>
-                {FEET.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c[locale]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t("discover.level")}>
-              <Select
-                value={form.playingLevel ?? ""}
-                onChange={(e) => set("playingLevel", (e.target.value || null) as ProfilePayload["playingLevel"])}
-              >
-                <option value="">{t("discover.any")}</option>
-                {LEVELS.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c[locale]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t("profileForm.club")}>
-              <Input value={form.currentClub ?? ""} onChange={(e) => set("currentClub", e.target.value)} />
-            </Field>
             <Field label={t("profileForm.jersey")}>
               <Input
                 inputMode="numeric"
@@ -278,17 +362,20 @@ function ProfileEditor() {
                 onChange={(e) => set("jerseyNumber", e.target.value ? Number(e.target.value) : null)}
               />
             </Field>
-            <Field label={t("profileForm.achievements")}>
-              <Input value={form.achievements ?? ""} onChange={(e) => set("achievements", e.target.value)} />
-            </Field>
-            <Field label={t("profileForm.injury")}>
-              <Input value={form.injuryStatus ?? ""} onChange={(e) => set("injuryStatus", e.target.value)} />
+            <Field label={t("profileForm.club")}>
+              <Input value={form.currentClub ?? ""} onChange={(e) => set("currentClub", e.target.value)} />
             </Field>
           </div>
+          <Field label={t("profileForm.achievements")}>
+            <Textarea value={form.achievements ?? ""} onChange={(e) => set("achievements", e.target.value)} />
+          </Field>
+          <Field label={t("profileForm.injury")}>
+            <Input value={form.injuryStatus ?? ""} onChange={(e) => set("injuryStatus", e.target.value)} />
+          </Field>
           <div>
-            <p className="mb-2 text-xs text-muted-foreground">{t("player.career")}</p>
+            <h3 className="mb-2 text-sm text-muted-foreground">{t("player.transfers")}</h3>
             {history.map((h, i) => (
-              <div key={i} className="mb-2 grid grid-cols-[1fr_80px_80px] gap-2">
+              <div key={i} className="mb-2 grid gap-2 sm:grid-cols-3">
                 <Input
                   value={h.club}
                   onChange={(e) =>
@@ -349,38 +436,63 @@ function ProfileEditor() {
 
         <section className="grid gap-4">
           <h2 className="text-sm font-medium text-muted-foreground">{t("profileForm.media")}</h2>
+          <p className="text-sm text-muted-foreground">{t("profileForm.videoHelp")}</p>
           {videos.map((v, i) => (
-            <div key={i} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-3">
-              <Field label={t("profileForm.videoUrl")}>
-                <Input
-                  value={v.youtubeUrl}
-                  onChange={(e) =>
-                    setVideos((rows) => rows.map((r, j) => (j === i ? { ...r, youtubeUrl: e.target.value } : r)))
+            <div key={i} className="grid gap-2 rounded-lg border border-border p-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Field label={t("profileForm.videoUrl")}>
+                  <Input
+                    value={v.youtubeUrl}
+                    onChange={(e) =>
+                      setVideos((rows) => rows.map((r, j) => (j === i ? { ...r, youtubeUrl: e.target.value } : r)))
+                    }
+                    placeholder="https://youtube.com/...  https://aparat.com/v/..."
+                  />
+                </Field>
+                <Field label={t("profileForm.videoTitle")}>
+                  <Input
+                    value={v.title}
+                    onChange={(e) =>
+                      setVideos((rows) => rows.map((r, j) => (j === i ? { ...r, title: e.target.value } : r)))
+                    }
+                  />
+                </Field>
+                <Field label={t("discover.any")}>
+                  <Select
+                    value={v.category}
+                    onChange={(e) =>
+                      setVideos((rows) => rows.map((r, j) => (j === i ? { ...r, category: e.target.value } : r)))
+                    }
+                  >
+                    {VIDEO_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c[locale]}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+              {v.youtubeUrl && parseVideoUrl(v.youtubeUrl) && <VideoEmbed url={v.youtubeUrl} title={v.title} />}
+              {v.id ? (
+                <AnalysisPanel
+                  videoId={v.id}
+                  videoUrl={v.youtubeUrl}
+                  canRun={!locked}
+                  initialStatus={
+                    (mine.data?.videos.find((x) => x.id === v.id)?.analysisStatus as
+                      | "idle"
+                      | "queued"
+                      | "running"
+                      | "analyzed"
+                      | "extraction_failed"
+                      | "failed"
+                      | undefined) ?? "idle"
                   }
+                  initialAnalysis={mine.data?.videos.find((x) => x.id === v.id)?.analysis ?? null}
                 />
-              </Field>
-              <Field label={t("profileForm.videoTitle")}>
-                <Input
-                  value={v.title}
-                  onChange={(e) =>
-                    setVideos((rows) => rows.map((r, j) => (j === i ? { ...r, title: e.target.value } : r)))
-                  }
-                />
-              </Field>
-              <Field label={t("discover.any")}>
-                <Select
-                  value={v.category}
-                  onChange={(e) =>
-                    setVideos((rows) => rows.map((r, j) => (j === i ? { ...r, category: e.target.value } : r)))
-                  }
-                >
-                  {VIDEO_CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c[locale]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("analysis.saveFirst")}</p>
+              )}
             </div>
           ))}
           <Button

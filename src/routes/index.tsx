@@ -230,7 +230,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="border-t border-border">
+      <section id="faq" className="border-t border-border">
         <div className="mx-auto max-w-3xl px-4 py-20">
           <h2 className="font-display text-3xl md:text-5xl">{t("faq.title")}</h2>
           <div className="mt-10">

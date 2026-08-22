@@ -91,12 +91,12 @@ export function SiteFooter() {
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>{t("footer.rights")}</span>
           <div className="flex gap-4">
-            <Link to="/" className="hover:text-foreground">
+            <a href="/#faq" className="hover:text-foreground">
               {t("footer.privacy")}
-            </Link>
-            <Link to="/" className="hover:text-foreground">
+            </a>
+            <a href="/#faq" className="hover:text-foreground">
               {t("footer.terms")}
-            </Link>
+            </a>
           </div>
         </div>
       </div>

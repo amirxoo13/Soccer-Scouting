@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlayerCard } from "@/components/player-card";
+import { VideoEmbed } from "@/components/video-embed";
 import { getMe } from "@/lib/server/me";
 import {
   adminProfileQueue,
@@ -154,9 +155,9 @@ function AdminPage() {
                   Selfie
                 </a>
                 {y.video_url && (
-                  <a className="underline" href={y.video_url} target="_blank" rel="noreferrer">
-                    Video
-                  </a>
+                  <div className="w-full max-w-md">
+                    <VideoEmbed url={y.video_url} title="Youth clip" />
+                  </div>
                 )}
               </div>
               <div className="mt-3 flex gap-2">

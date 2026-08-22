@@ -70,6 +70,10 @@ export type PlayerVideo = {
   category: string | null;
   sortOrder: number;
   playCount: number;
+  analysisStatus: string;
+  analysis: import("./video-analysis").VideoAnalysis | null;
+  analysisError: string | null;
+  analyzedAt: string | null;
 };
 
 export type PlayerProfile = PlayerCard & {

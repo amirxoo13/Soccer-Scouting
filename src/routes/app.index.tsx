@@ -54,9 +54,14 @@ function AppHome() {
         </p>
       )}
       {user?.role === "scout" && !me.data?.access?.canViewTalent && (
-        <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm">
-          {t("paywall.body")}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+          <p>{t("paywall.body")}</p>
+          <Button asChild size="sm">
+            <Link to="/app/wallet" search={{ plan: "desk" }}>
+              {t("paywall.pay")}
+            </Link>
+          </Button>
+        </div>
       )}
       {user?.role === "scout" && user.scoutStatus === "pending" && (
         <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm">{t("dash.pendingScout")}</p>

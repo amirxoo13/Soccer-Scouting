@@ -50,8 +50,10 @@ export function PricingGrid({ highlight }: { highlight?: PlanId }) {
             </ul>
             <Button asChild className="mt-6 w-full" variant={featured ? "default" : "outline"}>
               <Link
-                to={plan.id === "youth" ? "/login" : "/app/wallet"}
-                search={plan.id === "youth" ? { next: "/app/profile" } : { plan: plan.id }}
+                to="/login"
+                search={{
+                  next: plan.id === "youth" ? "/app/profile" : `/app/wallet?plan=${plan.id}`,
+                }}
               >
                 {plan.usd === 0 ? t("plans.ctaYouth") : t("plans.ctaPay")}
               </Link>

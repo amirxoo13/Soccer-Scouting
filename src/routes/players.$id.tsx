@@ -18,7 +18,10 @@ import { getAccess } from "@/lib/server/billing";
 import { getPublicPlayer, searchPlayers } from "@/lib/server/public";
 import { sendContact, toggleWatchlist, watchlistIds } from "@/lib/server/scout";
 import { ageFromDob } from "@/lib/utils";
-import { extractYoutubeId, youtubeEmbed, youtubeThumb } from "@/lib/youtube";
+import type { AnalysisStatus } from "@/lib/video-analysis";
+import { VideoEmbed } from "@/components/video-embed";
+import { AnalysisPanel } from "@/components/analysis-panel";
+import { videoThumb } from "@/lib/video-embed";
 
 export const Route = createFileRoute("/players/$id")({ component: PlayerPage });
 
@@ -134,7 +137,6 @@ function PlayerPage() {
   const age = ageFromDob(p.dob);
   const onWatch = watched.data?.includes(p.id);
   const video = p.videos[activeVideo];
-  const yt = video ? extractYoutubeId(video.youtubeUrl) : null;
   const d = dossierFor(p.firstName, p.lastName);
   const seasons = enrichHistory(p);
   const similarPlayers =
@@ -376,25 +378,24 @@ function PlayerPage() {
             ) : (
               <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)]">
                 <div className="overflow-hidden rounded-xl border border-border bg-card">
-                  {yt ? (
-                    <iframe
-                      title={video?.title ?? "video"}
-                      src={youtubeEmbed(yt)}
-                      className="aspect-video w-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <div className="grid aspect-video place-items-center text-sm text-muted-foreground">{video?.title}</div>
-                  )}
+                  {video ? <VideoEmbed url={video.youtubeUrl} title={video.title ?? undefined} /> : null}
                   <div className="p-4">
                     <div className="font-medium">{video?.title}</div>
                     <div className="mt-1 text-xs text-muted-foreground">{labeled(VIDEO_CATEGORIES, video?.category ?? null, locale)}</div>
+                    {video && (
+                      <AnalysisPanel
+                        videoId={video.id}
+                        videoUrl={video.youtubeUrl}
+                        canRun={Boolean(user) && p.userId === user?.id}
+                        initialStatus={(video.analysisStatus as AnalysisStatus) ?? "idle"}
+                        initialAnalysis={video.analysis}
+                      />
+                    )}
                   </div>
                 </div>
                 <div className="grid gap-2">
                   {p.videos.map((v, i) => {
-                    const idv = extractYoutubeId(v.youtubeUrl);
+                    const thumb = videoThumb(v.youtubeUrl);
                     return (
                       <button
                         key={v.id}
@@ -402,9 +403,9 @@ function PlayerPage() {
                         onClick={() => setActiveVideo(i)}
                         className="flex gap-3 rounded-lg border border-border bg-card p-2 text-start"
                       >
-                        {idv && (
+                        {thumb && (
                           <img
-                            src={youtubeThumb(idv)}
+                            src={thumb}
                             alt=""
                             className="h-16 w-28 rounded-md object-cover"
                             onError={(e) => {

@@ -157,17 +157,37 @@ async function replaceVideos(
   profileId: number,
   videos: { youtubeUrl: string; title?: string; description?: string; category?: string }[],
 ) {
-  await sql`delete from player_videos where profile_id = ${profileId}`;
+  const existing = await sql<{ id: number; youtube_url: string }>`
+    select id, youtube_url from player_videos where profile_id = ${profileId}
+  `;
+  const byUrl = new Map(existing.map((r) => [r.youtube_url, r.id]));
+  const keep = new Set<number>();
   let order = 0;
   for (const v of videos) {
     const url = v.youtubeUrl?.trim();
     if (!url) continue;
-    await sql`
-      insert into player_videos (profile_id, youtube_url, title, description, category, sort_order)
-      values (${profileId}, ${url}, ${v.title || null}, ${v.description || null}, ${v.category || null}, ${order})
-    `;
+    const current = byUrl.get(url);
+    if (current) {
+      await sql`
+        update player_videos
+        set title = ${v.title || null}, description = ${v.description || null},
+            category = ${v.category || null}, sort_order = ${order}
+        where id = ${current}
+      `;
+      keep.add(current);
+    } else {
+      const [row] = await sql<{ id: number }>`
+        insert into player_videos (profile_id, youtube_url, title, description, category, sort_order)
+        values (${profileId}, ${url}, ${v.title || null}, ${v.description || null}, ${v.category || null}, ${order})
+        returning id
+      `;
+      keep.add(row.id);
+    }
     order += 1;
-    if (order >= 6) break;
+    if (order >= 24) break;
+  }
+  for (const id of existing.filter((r) => !keep.has(r.id)).map((r) => r.id)) {
+    await sql`delete from player_videos where id = ${id}`;
   }
 }
 

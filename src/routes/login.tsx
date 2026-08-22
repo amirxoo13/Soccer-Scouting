@@ -1,8 +1,9 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useI18n } from "@/lib/i18n";
+import { rememberNext } from "@/lib/nav-next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/field";
@@ -12,9 +13,10 @@ type LoginSearch = { next?: string };
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): LoginSearch => {
-    const next = typeof search.next === "string" && search.next.startsWith("/") && !search.next.startsWith("//")
-      ? search.next
-      : undefined;
+    const next =
+      typeof search.next === "string" && search.next.startsWith("/") && !search.next.startsWith("//")
+        ? search.next
+        : undefined;
     return next ? { next } : {};
   },
   component: Login,
@@ -32,18 +34,12 @@ function Login() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 
-  const afterAuth = next?.startsWith("/app/wallet") ? "/app/wallet" : next?.startsWith("/discover") ? "/discover" : "/onboarding";
+  useEffect(() => {
+    rememberNext(next);
+  }, [next]);
 
-  if (!isPending && user) {
-    if (afterAuth === "/app/wallet") return <Navigate to="/app/wallet" search={{ plan: "desk" }} />;
-    if (afterAuth === "/discover") return <Navigate to="/discover" />;
-    return <Navigate to="/onboarding" />;
-  }
-  if (done) {
-    if (afterAuth === "/app/wallet") return <Navigate to="/app/wallet" search={{ plan: "desk" }} />;
-    if (afterAuth === "/discover") return <Navigate to="/discover" />;
-    return <Navigate to="/onboarding" />;
-  }
+  if (!isPending && user) return <Navigate to="/onboarding" />;
+  if (done) return <Navigate to="/onboarding" />;
 
   async function onEmail(e: FormEvent) {
     e.preventDefault();
@@ -118,28 +114,35 @@ function Login() {
             </button>
           </form>
 
+          {authEnabled && (
+            <>
           <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
             <span className="h-px flex-1 bg-border" />
             {t("auth.or")}
             <span className="h-px flex-1 bg-border" />
           </div>
-
-          {authEnabled ? (
             <div className="grid gap-2">
               {GROK_PROVIDERS.map((p) => (
                 <Button
                   key={p.providerId}
                   type="button"
                   variant="outline"
-                  onClick={() => signIn(p.providerId, { callbackURL: afterAuth })}
+                  onClick={() => {
+                    rememberNext(next);
+                    signIn(p.providerId, { callbackURL: "/onboarding" });
+                  }}
                 >
                   {p.providerId === "x" ? t("auth.x") : t("auth.google")}
                 </Button>
               ))}
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Sign-in is disabled.</p>
+            </>
           )}
+          <p className="mt-4 text-xs text-muted-foreground">
+            <Link to="/" className="underline-offset-4 hover:underline">
+              {t("common.back")}
+            </Link>
+          </p>
         </div>
       </div>
     </PageShell>

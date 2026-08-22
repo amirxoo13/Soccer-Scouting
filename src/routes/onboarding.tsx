@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { claimAdmin, completeOnboarding, getMe } from "@/lib/server/me";
+import { consumeNext, destinationFromNext } from "@/lib/nav-next";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +12,25 @@ import { PageShell } from "@/components/page-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
+import type { AppDestination } from "@/lib/nav-next";
 
 export const Route = createFileRoute("/onboarding")({ component: Onboarding });
+
+function go(nav: ReturnType<typeof useNavigate>, dest: AppDestination) {
+  if (dest.to === "/app/wallet") void nav({ to: "/app/wallet", search: dest.search });
+  else if (dest.to === "/discover") void nav({ to: "/discover" });
+  else if (dest.to === "/app/profile") void nav({ to: "/app/profile" });
+  else if (dest.to === "/players/$id") void nav({ to: "/players/$id", params: dest.params });
+  else void nav({ to: "/app" });
+}
+
+function DestNavigate({ dest }: { dest: AppDestination }) {
+  if (dest.to === "/app/wallet") return <Navigate to="/app/wallet" search={dest.search} />;
+  if (dest.to === "/discover") return <Navigate to="/discover" />;
+  if (dest.to === "/app/profile") return <Navigate to="/app/profile" />;
+  if (dest.to === "/players/$id") return <Navigate to="/players/$id" params={dest.params} />;
+  return <Navigate to="/app" />;
+}
 
 function Onboarding() {
   const { t } = useI18n();
@@ -25,6 +43,7 @@ function Onboarding() {
   const [orgName, setOrgName] = useState("");
   const [orgRole, setOrgRole] = useState("");
   const [busy, setBusy] = useState(false);
+  const [existingDest, setExistingDest] = useState<AppDestination | null>(null);
 
   useEffect(() => {
     if (isPending || !user) return;
@@ -32,6 +51,7 @@ function Onboarding() {
       .then((me) => {
         setHasUser(Boolean(me.user));
         setAdminCount(me.adminCount);
+        if (me.user) setExistingDest(destinationFromNext(consumeNext()));
         setReady(true);
       })
       .catch(() => setReady(true));
@@ -48,6 +68,7 @@ function Onboarding() {
     );
   }
   if (!user) return <RedirectToSignIn />;
+  if (hasUser && existingDest) return <DestNavigate dest={existingDest} />;
   if (hasUser) return <Navigate to="/app" />;
   const displayName = user.displayName ?? undefined;
 
@@ -62,7 +83,9 @@ function Onboarding() {
           orgRole: role === "scout" ? orgRole : undefined,
         },
       });
-      nav({ to: "/app" });
+      const dest = destinationFromNext(consumeNext());
+      if (role === "player" && dest.to === "/app") go(nav, { to: "/app/profile" });
+      else go(nav, dest);
     } finally {
       setBusy(false);
     }
@@ -101,17 +124,14 @@ function Onboarding() {
             </Field>
           </div>
         )}
-        <Button className="mt-8 w-full" disabled={busy} onClick={submit}>
+        <Button className="mt-8 w-full" disabled={busy} onClick={() => void submit()}>
           {t("onboarding.continue")}
         </Button>
         {adminCount === 0 && (
           <button
             type="button"
-            className="mt-4 w-full text-xs text-muted-foreground hover:text-foreground"
-            onClick={async () => {
-              await claimAdmin();
-              nav({ to: "/admin" });
-            }}
+            className="mt-4 text-xs text-muted-foreground underline-offset-4 hover:underline"
+            onClick={() => void claimAdmin().then(() => nav({ to: "/admin" }))}
           >
             {t("onboarding.claimAdmin")}
           </button>
