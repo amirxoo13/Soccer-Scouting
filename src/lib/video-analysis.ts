@@ -2,6 +2,7 @@ export type AnalysisStatus =
   | "idle"
   | "queued"
   | "running"
+  | "awaiting_mark"
   | "analyzed"
   | "extraction_failed"
   | "failed";
@@ -29,6 +30,19 @@ export type RadarScores = {
   defending: number;
 };
 
+export type PlayerAttributes = {
+  firstTouch: number;
+  weakerFoot: number;
+  scanning: number;
+  acceleration: number;
+  agility: number;
+  passing: number;
+  dribble: number;
+  finishing: number;
+  positioning: number;
+  decisionMaking: number;
+};
+
 export type VideoAnalysis = {
   playerBoxes: PlayerBox[];
   heatmap: number[][];
@@ -37,6 +51,14 @@ export type VideoAnalysis = {
   model: string;
   streamQuality: string | null;
   extractedAt: string;
+  stage?: "mark" | "complete";
+  frameUrl?: string | null;
+  frameWidth?: number;
+  frameHeight?: number;
+  markedPlayerId?: number | null;
+  position?: string | null;
+  role?: string | null;
+  level?: string | null;
   framesAnalyzed?: number;
   playersOnPitch?: number;
   ballDetected?: boolean;
@@ -46,6 +68,7 @@ export type VideoAnalysis = {
   width?: number | null;
   intensity?: number | null;
   radar?: RadarScores | null;
+  attributes?: PlayerAttributes | null;
   strengths?: string[];
   weaknesses?: string[];
   notes?: string | null;

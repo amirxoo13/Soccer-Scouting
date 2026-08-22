@@ -42,3 +42,12 @@ export const getVideoAnalysis = createServerFn({ method: "GET" })
       analysis: (row.analysis_json ?? null) as VideoAnalysis | null,
     };
   });
+
+export const markVideoPlayer = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { videoId: number; playerId: number }) => input)
+  .handler(async ({ context, data }) => {
+    const { markPlayer } = await import("./analysis-queue");
+    const analysis = await markPlayer(context.userId, data.videoId, data.playerId);
+    return { status: "analyzed" as const, analysis };
+  });
