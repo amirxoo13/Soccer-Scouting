@@ -1,6 +1,8 @@
+export type VideoFrame = { bytes: Buffer; mime: string; source: string; width: number; height: number };
+
 const UA = "Mozilla/5.0 (compatible; SoccerScouting/1.0; +https://soccer-scouting.vercel.app)";
 
-function youtubeId(raw: string) {
+export function youtubeId(raw: string) {
   try {
     const u = new URL(raw);
     const host = u.hostname.replace(/^www\./, "");
@@ -55,6 +57,32 @@ async function ogImage(pageUrl: string) {
   return m?.[1] ?? null;
 }
 
+function imageSize(buf: Buffer, mime: string): { width: number; height: number } {
+  try {
+    if (mime.includes("png") && buf.length > 24) {
+      return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+    }
+    if (mime.includes("jpeg") || mime.includes("jpg")) {
+      let i = 2;
+      while (i < buf.length - 9) {
+        if (buf[i] !== 0xff) {
+          i += 1;
+          continue;
+        }
+        const marker = buf[i + 1];
+        if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+          return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+        }
+        const len = buf.readUInt16BE(i + 2);
+        i += 2 + len;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return { width: 1280, height: 720 };
+}
+
 export async function collectFrameUrls(pageUrl: string): Promise<string[]> {
   const out: string[] = [];
   const yt = youtubeId(pageUrl);
@@ -62,6 +90,9 @@ export async function collectFrameUrls(pageUrl: string): Promise<string[]> {
     out.push(
       `https://i.ytimg.com/vi/${yt}/maxresdefault.jpg`,
       `https://i.ytimg.com/vi/${yt}/sddefault.jpg`,
+      `https://i.ytimg.com/vi/${yt}/1.jpg`,
+      `https://i.ytimg.com/vi/${yt}/2.jpg`,
+      `https://i.ytimg.com/vi/${yt}/3.jpg`,
       `https://i.ytimg.com/vi/${yt}/hqdefault.jpg`,
     );
   }
@@ -103,28 +134,41 @@ export async function collectFrameUrls(pageUrl: string): Promise<string[]> {
   return [...new Set(out.filter((u) => /^https?:\/\//i.test(u) && !u.includes("oembed")))];
 }
 
-export async function fetchVideoFrame(pageUrl: string): Promise<{ bytes: Buffer; mime: string; source: string }> {
+async function loadFrame(url: string): Promise<VideoFrame | null> {
+  const res = await fetch(url, { headers: { "user-agent": UA, accept: "image/*" }, redirect: "follow" });
+  if (!res.ok) return null;
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length < 2000) return null;
+  let mime = "image/jpeg";
+  if (buf[0] === 0x89 && buf[1] === 0x50) mime = "image/png";
+  else if (buf[0] === 0x47 && buf[1] === 0x49) mime = "image/gif";
+  else if (!(buf[0] === 0xff && buf[1] === 0xd8)) return null;
+  const size = imageSize(buf, mime);
+  return { bytes: buf, mime, source: url, ...size };
+}
+
+export async function fetchVideoFrames(pageUrl: string, limit = 3): Promise<VideoFrame[]> {
   const urls = await collectFrameUrls(pageUrl);
-  let last = urls.length ? "no usable image" : "no thumbnail for this host";
+  const frames: VideoFrame[] = [];
+  const seen = new Set<string>();
   for (const url of urls) {
+    if (frames.length >= limit) break;
     try {
-      const res = await fetch(url, { headers: { "user-agent": UA, accept: "image/*" }, redirect: "follow" });
-      if (!res.ok) {
-        last = `${url} HTTP ${res.status}`;
-        continue;
-      }
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length < 1500) {
-        last = "tiny payload";
-        continue;
-      }
-      if (buf[0] === 0xff && buf[1] === 0xd8) return { bytes: buf, mime: "image/jpeg", source: url };
-      if (buf[0] === 0x89 && buf[1] === 0x50) return { bytes: buf, mime: "image/png", source: url };
-      if (buf[0] === 0x47 && buf[1] === 0x49) return { bytes: buf, mime: "image/gif", source: url };
-      last = "not an image";
-    } catch (err) {
-      last = err instanceof Error ? err.message : String(err);
+      const frame = await loadFrame(url);
+      if (!frame) continue;
+      const key = `${frame.width}x${frame.height}:${frame.bytes.length}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      frames.push(frame);
+    } catch {
+      /* next */
     }
   }
-  throw new Error(`Could not fetch a still from this video (${last})`);
+  if (!frames.length) throw new Error("Could not fetch a still from this video");
+  return frames;
+}
+
+export async function fetchVideoFrame(pageUrl: string): Promise<VideoFrame> {
+  const [first] = await fetchVideoFrames(pageUrl, 1);
+  return first;
 }
