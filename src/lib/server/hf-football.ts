@@ -183,8 +183,8 @@ function assignTeams(boxes: PlayerBox[], frame?: VideoFrame) {
   };
   return {
     boxes: boxes.map((b) => {
-      if (b.id === refereeId) return { ...b, label: "referee", team: "ref", role: "referee", kit: "#111111" };
       if (b.label === "ball") return b;
+      if (b.label === "referee" || b.id === refereeId) return { ...b, label: "referee", team: "ref", role: "referee", kit: "#111111" };
       const team = teamOf(b.id) ?? ((b.pitchX ?? 50) < 50 ? "home" : "away");
       return { ...b, team, kit: team === "home" ? homeKit : awayKit };
     }),
@@ -432,6 +432,18 @@ function fallbackIssues(boxes: PlayerBox[]): TeamIssue[] {
   return issues.slice(0, 5);
 }
 
+function usefulText(v: unknown, fallback: string) {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s || /unknown|n\/?a|none|unspecified|player\s*\d+/i.test(s)) return fallback;
+  return s;
+}
+
+function usefulNotes(v: unknown, fallback: string) {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (!s || /further (analysis|observation)|needed to (assess|determine)/i.test(s)) return fallback;
+  return s;
+}
+
 function obj(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
@@ -449,8 +461,8 @@ function mergeDossier(base: PlayerDossier, raw: unknown): PlayerDossier {
   const gk = /gk|goalkeeper/i.test(String(r.position || base.position));
   return {
     ...base,
-    position: typeof r.position === "string" ? r.position : base.position,
-    role: typeof r.role === "string" ? r.role : base.role,
+    position: usefulText(r.position, base.position),
+    role: usefulText(r.role, base.role),
     stats: {
       distanceM: pickStat(num(run.distanceM) ?? num(st.distanceM), s.distanceM, gk ? 8 : 25),
       sprints: pickStat(num(run.sprints) ?? num(st.sprints), s.sprints, gk ? 0 : 1),
@@ -494,9 +506,9 @@ function mergeDossier(base: PlayerDossier, raw: unknown): PlayerDossier {
       positioning: clamp(num(attr.positioning) ?? base.attributes.positioning),
       decisionMaking: clamp(num(attr.decisionMaking) ?? base.attributes.decisionMaking),
     },
-    strengths: Array.isArray(r.strengths) ? r.strengths.map(String).slice(0, 4) : base.strengths,
-    weaknesses: Array.isArray(r.weaknesses) ? r.weaknesses.map(String).slice(0, 3) : base.weaknesses,
-    notes: typeof r.notes === "string" ? r.notes : base.notes,
+    strengths: Array.isArray(r.strengths) && r.strengths.length ? r.strengths.map(String).slice(0, 4) : base.strengths,
+    weaknesses: Array.isArray(r.weaknesses) && r.weaknesses.length ? r.weaknesses.map(String).slice(0, 3) : base.weaknesses,
+    notes: usefulNotes(r.notes, base.notes),
     recommendation: typeof r.recommendation === "string" ? r.recommendation : base.recommendation,
   };
 }
@@ -546,8 +558,51 @@ Judge only what is visible. If the ball is on the centre spot and both teams are
 Never label every player as goalkeeper. Do not skip outfield players. Running must not be zeros.`;
 }
 
+function boxesFromPeople(raw: unknown, frame: VideoFrame): PlayerBox[] {
+  const list = Array.isArray(raw) ? raw : [];
+  return list
+    .map((item, i) => {
+      const o = obj(item);
+      const x = clamp(num(o.x) ?? num(o.pitchX) ?? 50);
+      const y = clamp(num(o.y) ?? num(o.pitchY) ?? 50);
+      const kind = String(o.kind || o.type || o.label || "player");
+      const label = /ball/i.test(kind) ? "ball" : /ref/i.test(kind) ? "referee" : "player";
+      const px = (x / 100) * frame.width;
+      const py = (y / 100) * frame.height;
+      const team = o.team === "away" || o.team === "home" || o.team === "ref" ? String(o.team) : null;
+      return {
+        id: i + 1,
+        label,
+        x: px - 16,
+        y: py - 28,
+        w: 32,
+        h: 52,
+        pitchX: x,
+        pitchY: y,
+        confidence: 0.72,
+        team,
+        role: typeof o.pos === "string" ? o.pos : typeof o.position === "string" ? o.position : null,
+      };
+    })
+    .filter((b) => Number.isFinite(b.pitchX) && Number.isFinite(b.pitchY));
+}
+
+async function locateSquad(frame: VideoFrame, hf: string) {
+  const json = await scoutWithVision(
+    frame,
+    hf,
+    `This is a football MATCH still (${frame.width}x${frame.height}), not a portrait.
+Count EVERY person on the grass: both XIs if visible, both goalkeepers, the referee, and the ball.
+x and y are percent of the IMAGE, origin top-left.
+Return ONE JSON object only:
+{"kickoff":false,"phase":"kickoff|attack|defense|transition","people":[{"kind":"player","team":"home","pos":"CB","x":18,"y":42},{"kind":"player","team":"away","pos":"ST","x":72,"y":48},{"kind":"referee","team":"ref","pos":"REF","x":50,"y":52},{"kind":"ball","team":null,"pos":"ball","x":50,"y":50}]}
+If you see a full pitch, you MUST return at least 8 people. If this is a close-up of one face, return 1 person only.`,
+  );
+  return { json, boxes: boxesFromPeople(json?.people, frame) };
+}
+
 async function bestFrame(pageUrl: string, hf: string) {
-  const frames = await fetchVideoFrames(pageUrl, 3);
+  const frames = await fetchVideoFrames(pageUrl, 2);
   let bestWide: { frame: VideoFrame; boxes: PlayerBox[] } | null = null;
   let bestAny: { frame: VideoFrame; boxes: PlayerBox[] } | null = null;
   const countOf = (boxes: PlayerBox[]) => boxes.filter((b) => b.label === "player").length;
@@ -567,27 +622,40 @@ export async function analyzeStream(_streamUrl: string, pageUrl: string, quality
   const hf = token();
   if (!hf) throw new Error("HF_TOKEN is not configured on the server");
   const { frame, boxes: raw, framesUsed } = await bestFrame(pageUrl, hf);
-  const players = raw
+  let players = raw
     .filter((b) => b.label === "player")
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 16)
     .map((b, i) => ({ ...b, id: i + 1 }));
-  const balls = raw.filter((b) => b.label === "ball").map((b, i) => ({ ...b, id: players.length + i + 1 }));
-  const tagged = assignTeams(players.concat(balls), frame);
+  let balls = raw.filter((b) => b.label === "ball").map((b, i) => ({ ...b, id: players.length + i + 1 }));
+  let extras: PlayerBox[] = [];
+  if (players.length < 8) {
+    const located = await locateSquad(frame, hf);
+    const lp = located.boxes.filter((b) => b.label === "player");
+    if (lp.length > players.length) {
+      players = lp.map((b, i) => ({ ...b, id: i + 1 }));
+      balls = located.boxes.filter((b) => b.label === "ball").map((b, i) => ({ ...b, id: players.length + i + 1 }));
+      extras = located.boxes
+        .filter((b) => b.label === "referee")
+        .map((b, i) => ({ ...b, id: players.length + balls.length + i + 1 }));
+    }
+  }
+  const tagged = assignTeams(players.concat(balls).concat(extras), frame);
   const numbered = tagged.boxes;
   if (!players.length) throw new Error("No players found on this still. Use a match clip, not a trailer.");
   const heat = gaussianHeat(numbered);
   const spread = spreadMetrics(numbered);
   const grass = grassRatio(frame);
   const bases = numbered.filter((b) => b.label === "player").map(fallbackDossier);
-  const scout = await scoutWithVision(frame, hf, squadPrompt(frame, numbered));
+  const scout =
+    bases.length >= 6 ? await scoutWithVision(frame, hf, squadPrompt(frame, numbered)) : null;
   const visionPlayers = Array.isArray(scout?.players) ? scout.players : [];
   const byId = new Map<number, unknown>();
   for (const row of visionPlayers) {
     const id = num(obj(row).id);
     if (id != null) byId.set(id, row);
   }
-  const visionOk = visionPlayers.length >= 3 || (bases.length <= 2 && visionPlayers.length === bases.length);
+  const visionOk = visionPlayers.length >= 4;
   const dossiers = bases.map((b) => (visionOk ? mergeDossier(b, byId.get(b.id)) : b));
   const issueRaw = Array.isArray(scout?.teamIssues) ? scout.teamIssues : [];
   const teamIssues: TeamIssue[] =

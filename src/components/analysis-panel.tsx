@@ -278,24 +278,25 @@ function Result({ data }: { data: VideoAnalysis }) {
         </div>
       )}
 
-      {!!dossiers.length && (
-        <div className="flex flex-wrap gap-1.5">
-          {dossiers.map((d) => (
-            <button
-              key={d.id}
-              type="button"
-              onClick={() => setSelectedId(d.id)}
-              className={`rounded-full border px-2.5 py-1 text-xs ${
-                d.id === selectedId ? "border-amber-400 bg-amber-400/15 text-amber-200" : "border-border text-muted-foreground"
-              }`}
-            >
-              #{d.id} {d.position}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {selected ? <PlayerReport player={selected} /> : null}
+      {dossiers.length >= 6 ? (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            {dossiers.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setSelectedId(d.id)}
+                className={`rounded-full border px-2.5 py-1 text-xs ${
+                  d.id === selectedId ? "border-amber-400 bg-amber-400/15 text-amber-200" : "border-border text-muted-foreground"
+                }`}
+              >
+                #{d.id} {d.position}
+              </button>
+            ))}
+          </div>
+          {selected ? <PlayerReport player={selected} /> : null}
+        </>
+      ) : null}
       <p className="text-[11px] text-muted-foreground">{t("analysis.disclaimer")}</p>
     </div>
   );

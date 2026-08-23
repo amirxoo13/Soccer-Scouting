@@ -86,7 +86,55 @@ function imageSize(buf: Buffer, mime: string): { width: number; height: number }
   return { width: 1280, height: 720 };
 }
 
+async function framesFromSpec(specRaw: string): Promise<VideoFrame[]> {
+  const spec = specRaw.replace(/\\u0026/g, "&").replace(/\\\//g, "/").replace(/\\+/g, "");
+  const parts = spec.split("|");
+  if (parts.length < 2) return [];
+  const base = parts[0];
+  const level = parts[Math.min(3, parts.length - 1)];
+  const bits = level.split("#");
+  const cols = Number(bits[3] || 5) || 5;
+  const rows = Number(bits[4] || 5) || 5;
+  const sigh = bits[bits.length - 1] || "";
+  const out: VideoFrame[] = [];
+  for (const m of [1, 2, 3, 4]) {
+    let url = base.replace("$L", String(Math.min(2, parts.length - 2))).replace("$N", `M${m}`);
+    if (sigh && !url.includes("sigh=")) url += (url.includes("?") ? "&" : "?") + `sigh=${sigh}`;
+    const sprite = await loadFrame(url);
+    if (!sprite) continue;
+    const picks = [Math.floor((cols * rows) / 3), Math.floor((cols * rows) / 2), Math.floor((cols * rows) * 0.72)];
+    for (const idx of picks) {
+      const cell = cropSpriteCell(sprite, cols, rows, idx);
+      if (cell) out.push(cell);
+    }
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 async function youtubeStoryboardFrames(videoId: string): Promise<VideoFrame[]> {
+  try {
+    const api = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
+      method: "POST",
+      headers: { "content-type": "application/json", "user-agent": UA },
+      body: JSON.stringify({
+        context: { client: { clientName: "WEB", clientVersion: "2.20240101.00.00", hl: "en" } },
+        videoId,
+      }),
+    });
+    if (api.ok) {
+      const json = (await api.json()) as {
+        storyboards?: { playerStoryboardSpecRenderer?: { spec?: string } };
+      };
+      const spec = json.storyboards?.playerStoryboardSpecRenderer?.spec;
+      if (spec) {
+        const fromApi = await framesFromSpec(spec);
+        if (fromApi.length) return fromApi;
+      }
+    }
+  } catch {
+    /* html fallback */
+  }
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: { "user-agent": UA, "accept-language": "en" },
@@ -98,32 +146,7 @@ async function youtubeStoryboardFrames(videoId: string): Promise<VideoFrame[]> {
       html.match(/playerStoryboardSpecRenderer":\{"spec":"([^"]+)"/) ||
       html.match(/"storyboard_spec":"([^"]+)"/);
     if (!specMatch) return [];
-    const spec = specMatch[1]
-      .replace(/\\u0026/g, "&")
-      .replace(/\\\//g, "/")
-      .replace(/\\+/g, "");
-    const parts = spec.split("|");
-    if (parts.length < 3) return [];
-    const base = parts[0];
-    const level = parts[Math.min(3, parts.length - 1)];
-    const bits = level.split("#");
-    const cols = Number(bits[3] || 5) || 5;
-    const rows = Number(bits[4] || 5) || 5;
-    const sigh = bits[bits.length - 1] || "";
-    const out: VideoFrame[] = [];
-    for (const m of [1, 2, 3]) {
-      let url = base.replace("$L", String(Math.min(2, parts.length - 2))).replace("$N", `M${m}`);
-      if (sigh && !url.includes("sigh=")) url += (url.includes("?") ? "&" : "?") + `sigh=${sigh}`;
-      const sprite = await loadFrame(url);
-      if (!sprite) continue;
-      const picks = [Math.floor((cols * rows) / 3), Math.floor((cols * rows) / 2), Math.floor((cols * rows) * 0.7)];
-      for (const idx of picks) {
-        const cell = cropSpriteCell(sprite, cols, rows, idx);
-        if (cell) out.push(cell);
-      }
-      if (out.length >= 6) break;
-    }
-    return out;
+    return framesFromSpec(specMatch[1]);
   } catch {
     return [];
   }
