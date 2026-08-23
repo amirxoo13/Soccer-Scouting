@@ -37,7 +37,19 @@ export const getMe = createServerFn({ method: "GET" })
         const videos = await sql<Record<string, unknown>>`
           select * from player_videos where profile_id = ${row.id} order by sort_order, id
         `;
-        profile = mapProfile(row, videos.map(mapVideo));
+        const mappedVideos = videos.map(mapVideo);
+        const deadIds = videos
+          .filter((v, i) => v.analysis_json && !mappedVideos[i]?.analysis)
+          .map((v) => Number(v.id))
+          .filter((id) => Number.isFinite(id));
+        if (deadIds.length) {
+          await sql`
+            update player_videos
+            set analysis_json = null, analysis_status = 'idle', analysis_error = null
+            where id in ${sql(deadIds)}
+          `;
+        }
+        profile = mapProfile(row, mappedVideos.map((v) => (deadIds.includes(v.id) ? { ...v, analysis: null, analysisStatus: "idle" } : v)));
       }
     }
     return {

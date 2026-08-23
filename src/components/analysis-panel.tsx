@@ -223,7 +223,13 @@ function PlayerReport({ player }: { player: PlayerDossier }) {
 function Result({ data }: { data: VideoAnalysis }) {
   const { t } = useI18n();
   const dossiers = data.dossiers ?? [];
-  const issues = (data.teamIssues ?? []).filter((issue) => !isUselessIssue(issue.problem, issue.zone));
+  const issues = (data.teamIssues ?? []).filter((issue) => {
+    if (isUselessIssue(issue.problem, issue.zone)) return false;
+    const blob = `${issue.zone} ${issue.problem}`.toLowerCase();
+    if (blob.includes("too tight") || blob.includes("wide match") || blob.includes("frame")) return false;
+    return true;
+  });
+  if (!dossiers.length) return null;
   const [selectedId, setSelectedId] = useState<number>(dossiers[0]?.id ?? data.playerBoxes.find((b) => b.label === "player")?.id ?? 1);
   const selected = useMemo(() => dossiers.find((d) => d.id === selectedId) ?? dossiers[0], [dossiers, selectedId]);
   return (

@@ -36,12 +36,19 @@ export const getVideoAnalysis = createServerFn({ method: "GET" })
     if (!row) throw new Error("Video not found");
     const analysis = sanitizeAnalysis(row.analysis_json);
     const hasReport = !!analysis?.dossiers?.length;
+    if (!hasReport && row.analysis_json) {
+      await sql`
+        update player_videos
+        set analysis_json = null, analysis_status = 'idle', analysis_error = null
+        where id = ${row.id}
+      `;
+    }
     return {
       videoId: row.id,
       videoUrl: row.youtube_url,
       status: (hasReport ? row.analysis_status : "idle") as AnalysisStatus,
-      error: row.analysis_error,
-      analyzedAt: row.analyzed_at,
+      error: hasReport ? row.analysis_error : null,
+      analyzedAt: hasReport ? row.analyzed_at : null,
       analysis: hasReport ? analysis : null,
     };
   });
