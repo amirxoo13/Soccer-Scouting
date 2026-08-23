@@ -102,7 +102,7 @@ async function framesFromSpec(specRaw: string): Promise<VideoFrame[]> {
     if (sigh && !url.includes("sigh=")) url += (url.includes("?") ? "&" : "?") + `sigh=${sigh}`;
     const sprite = await loadFrame(url);
     if (!sprite) continue;
-    const picks = [Math.floor((cols * rows) / 3), Math.floor((cols * rows) / 2), Math.floor((cols * rows) * 0.72)];
+    const picks = Array.from({ length: cols * rows }, (_, i) => i).filter((i) => i % 2 === 1);
     for (const idx of picks) {
       const cell = cropSpriteCell(sprite, cols, rows, idx);
       if (cell) out.push(cell);
@@ -237,7 +237,7 @@ export async function fetchVideoFrames(pageUrl: string, limit = 3): Promise<Vide
   const ranked = loaded
     .map((frame) => ({ frame, grass: grassRatio(frame) }))
     .sort((a, b) => b.grass - a.grass);
-  const playable = ranked.filter((r) => r.grass >= 0.16);
+  const playable = ranked.filter((r) => r.grass >= 0.08);
   const pick = (playable.length ? playable : ranked).slice(0, limit);
   return pick.map((p) => p.frame);
 }

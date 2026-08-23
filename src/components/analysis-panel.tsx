@@ -256,8 +256,8 @@ function Result({ data }: { data: VideoAnalysis }) {
         )}
       </div>
 
-      {(!dossiers.length || dossiers.length < 4) && (
-        <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">{t("analysis.closeUp")}</p>
+      {dossiers.length > 0 && dossiers.length < 6 && (
+        <p className="rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-muted-foreground">{t("analysis.tightHint")}</p>
       )}
 
       {data.heatmap?.length ? (
@@ -272,13 +272,13 @@ function Result({ data }: { data: VideoAnalysis }) {
               <p className="text-[11px] uppercase tracking-wide text-amber-300">
                 {issue.team} · {issue.zone} · {issue.severity}
               </p>
-              <p className="mt-1 text-sm">{issue.problem}</p>
+              <p className="mt-1 text-sm">{issue.problem === "tightHint" ? t("analysis.tightHint") : issue.problem}</p>
             </div>
           ))}
         </div>
       )}
 
-      {dossiers.length >= 6 ? (
+      {dossiers.length >= 1 ? (
         <>
           <div className="flex flex-wrap gap-1.5">
             {dossiers.map((d) => (

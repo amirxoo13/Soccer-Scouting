@@ -401,17 +401,15 @@ function fallbackDossier(box: PlayerBox): PlayerDossier {
 
 function fallbackIssues(boxes: PlayerBox[]): TeamIssue[] {
   const players = boxes.filter((b) => b.label === "player");
-  if (players.length < 4) {
-    return [
-      {
-        team: "both",
-        zone: "frame",
-        severity: "high",
-        problem: "This still is too tight. Use a wide match clip so every player on the pitch can be read.",
-      },
-    ];
-  }
   const issues: TeamIssue[] = [];
+  if (players.length < 6) {
+    issues.push({
+      team: "both",
+      zone: "camera",
+      severity: "low",
+      problem: "tightHint",
+    });
+  }
   for (const team of ["home", "away"] as const) {
     const side = players.filter((p) => p.team === team);
     if (side.length < 2) continue;
@@ -555,7 +553,47 @@ Return ONE JSON object only, no markdown.
   }]
 }
 Judge only what is visible. If the ball is on the centre spot and both teams are in shape, phase is kickoff.
-Never label every player as goalkeeper. Do not skip outfield players. Running must not be zeros.`;
+Never label a player Unknown. Infer CB, 6, 8, 10, W, 9 or GK from location and body shape.`;
+}
+
+function highlightPrompt(frame: VideoFrame, boxes: PlayerBox[]) {
+  const lines = boxes
+    .filter((b) => b.label === "player" || b.label === "referee")
+    .map((b) => {
+      const inf = inferRole(b);
+      return `#${b.id} ${b.label} ${b.team || "?"} ${inf.position} pitch=${b.pitchX},${b.pitchY}`;
+    })
+    .join("\n");
+  return `You are a senior football scout. The still is ${frame.width}x${frame.height}.
+This camera may be tight. Still write a full report on EVERY numbered player you can see.
+Players:
+${lines}
+JSON only:
+{
+  "phase": "attack|defense|transition|set_piece|kickoff",
+  "players": [{
+    "id": 1,
+    "position": "8",
+    "role": "box-to-box",
+    "running": {"distanceM":85,"sprints":2,"maxSpeedKmh":29,"intensity":74},
+    "passing": {"completed":6,"attempted":8,"keyPasses":1,"accuracy":75},
+    "positioning": 70,
+    "tackles": {"won":1,"lost":0},
+    "shots": {"total":1,"onTarget":0,"xg":0.08},
+    "defending": 62,
+    "interceptions": 1,
+    "chancesCreated": 1,
+    "chancesWasted": 0,
+    "radar": {"technical":64,"tactical":66,"physical":70,"mental":63,"attacking":58,"defending":60},
+    "strengths": ["...","..."],
+    "weaknesses": ["..."],
+    "notes": "two concrete sentences",
+    "recommendation": "trial|monitor|pass"
+  }],
+  "teamIssues": [{"team":"both","zone":"midfield","severity":"medium","problem":"one tactical sentence"}]
+}
+Never use the word Unknown. Never return empty strengths.`;
+}
 }
 
 function boxesFromPeople(raw: unknown, frame: VideoFrame): PlayerBox[] {
@@ -647,33 +685,34 @@ export async function analyzeStream(_streamUrl: string, pageUrl: string, quality
   const spread = spreadMetrics(numbered);
   const grass = grassRatio(frame);
   const bases = numbered.filter((b) => b.label === "player").map(fallbackDossier);
-  const scout =
-    bases.length >= 6 ? await scoutWithVision(frame, hf, squadPrompt(frame, numbered)) : null;
+  const scout = await scoutWithVision(
+    frame,
+    hf,
+    bases.length >= 8 ? squadPrompt(frame, numbered) : highlightPrompt(frame, numbered),
+  );
   const visionPlayers = Array.isArray(scout?.players) ? scout.players : [];
   const byId = new Map<number, unknown>();
   for (const row of visionPlayers) {
     const id = num(obj(row).id);
     if (id != null) byId.set(id, row);
   }
-  const visionOk = visionPlayers.length >= 4;
+  const visionOk = visionPlayers.length >= 1;
   const dossiers = bases.map((b) => (visionOk ? mergeDossier(b, byId.get(b.id)) : b));
   const issueRaw = Array.isArray(scout?.teamIssues) ? scout.teamIssues : [];
-  const teamIssues: TeamIssue[] =
-    players.length < 4
-      ? fallbackIssues(numbered)
-      : issueRaw.length > 0
-        ? issueRaw.slice(0, 6).map((item) => {
-            const o = obj(item);
-            const team = o.team === "away" || o.team === "home" || o.team === "both" ? o.team : "both";
-            const severity = o.severity === "high" || o.severity === "medium" || o.severity === "low" ? o.severity : "medium";
-            return {
-              team,
-              zone: typeof o.zone === "string" ? o.zone : "pitch",
-              severity,
-              problem: typeof o.problem === "string" ? o.problem : "",
-            };
-          })
-        : fallbackIssues(numbered);
+  const mappedIssues: TeamIssue[] = issueRaw.slice(0, 6).map((item) => {
+    const o = obj(item);
+    const team = o.team === "away" || o.team === "home" || o.team === "both" ? o.team : "both";
+    const severity = o.severity === "high" || o.severity === "medium" || o.severity === "low" ? o.severity : "medium";
+    return {
+      team,
+      zone: typeof o.zone === "string" ? o.zone : "pitch",
+      severity,
+      problem: typeof o.problem === "string" ? o.problem : "",
+    };
+  });
+  const teamIssues: TeamIssue[] = mappedIssues.length ? mappedIssues.concat(
+    players.length < 6 ? fallbackIssues(numbered).filter((i) => i.problem === "tightHint") : [],
+  ) : fallbackIssues(numbered);
   const poss = obj(scout?.possession);
   const home = dossiers.filter((d) => d.team === "home");
   const away = dossiers.filter((d) => d.team === "away");
