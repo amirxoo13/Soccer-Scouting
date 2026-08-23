@@ -240,6 +240,10 @@ function Result({ data }: { data: VideoAnalysis }) {
         )}
       </div>
 
+      {(!dossiers.length || dossiers.length < 4) && (
+        <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">{t("analysis.closeUp")}</p>
+      )}
+
       {data.heatmap?.length ? (
         <PitchMap grid={data.heatmap} players={data.playerBoxes ?? []} selectedId={selectedId} onPick={setSelectedId} />
       ) : null}

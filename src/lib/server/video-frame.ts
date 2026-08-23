@@ -88,12 +88,14 @@ export async function collectFrameUrls(pageUrl: string): Promise<string[]> {
   const yt = youtubeId(pageUrl);
   if (yt) {
     out.push(
-      `https://i.ytimg.com/vi/${yt}/maxresdefault.jpg`,
-      `https://i.ytimg.com/vi/${yt}/sddefault.jpg`,
       `https://i.ytimg.com/vi/${yt}/1.jpg`,
       `https://i.ytimg.com/vi/${yt}/2.jpg`,
       `https://i.ytimg.com/vi/${yt}/3.jpg`,
+      `https://i.ytimg.com/vi/${yt}/0.jpg`,
+      `https://i.ytimg.com/vi/${yt}/mqdefault.jpg`,
+      `https://i.ytimg.com/vi/${yt}/sddefault.jpg`,
       `https://i.ytimg.com/vi/${yt}/hqdefault.jpg`,
+      `https://i.ytimg.com/vi/${yt}/maxresdefault.jpg`,
     );
   }
   const aparat = aparatHash(pageUrl);

@@ -326,7 +326,7 @@ export const fa: Messages = {
     interceptions: "قطع توپ",
     chancesCreated: "موقعیت ساخته",
     chancesWasted: "موقعیت خراب",
-    teamIssues: "ضعف‌های تیمی روی زمین",
+    closeUp: "این تصویر کلوزآپ است. لینک کلیپ بازی از زمین کامل بگذارید تا همه بازیکنان خوانده شوند.",
     home: "میزبان",
     away: "میهمان",
     markTitle: "بازیکن را روی تصویر علامت بزنید",

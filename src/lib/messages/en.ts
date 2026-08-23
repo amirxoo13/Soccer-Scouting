@@ -324,7 +324,7 @@ export const en = {
     interceptions: "Interceptions",
     chancesCreated: "Chances created",
     chancesWasted: "Chances wasted",
-    teamIssues: "Team problems on the pitch",
+    closeUp: "This still is a close-up. Paste a wide match clip so the whole team can be read.",
     home: "Home",
     away: "Away",
     markTitle: "Mark the player to scout",
