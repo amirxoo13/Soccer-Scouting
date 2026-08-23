@@ -19,6 +19,7 @@ export type PlayerBox = {
   confidence: number;
   team?: string | null;
   role?: string | null;
+  kit?: string | null;
 };
 
 export type RadarScores = {
@@ -129,6 +130,11 @@ export type VideoAnalysis = {
   };
   dossiers?: PlayerDossier[];
   teamIssues?: TeamIssue[];
+  kickoffDetected?: boolean;
+  pitchDetected?: boolean;
+  refereeId?: number | null;
+  homeKit?: string | null;
+  awayKit?: string | null;
 };
 
 export function isPendingStatus(s: AnalysisStatus | string | null | undefined) {

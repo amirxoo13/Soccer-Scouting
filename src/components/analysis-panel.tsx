@@ -68,9 +68,17 @@ function PitchMap({
               <circle
                 cx={cx}
                 cy={cy}
-                r={p.label === "ball" ? 0.85 : selected ? 1.8 : 1.35}
-                fill={p.label === "ball" ? "#f8fafc" : selected ? "#fbbf24" : p.team === "away" ? "#ef4444" : "#38bdf8"}
-                stroke="rgba(0,0,0,0.45)"
+                r={p.label === "ball" ? 0.9 : p.label === "referee" ? 1.2 : selected ? 1.8 : 1.35}
+                fill={
+                  p.label === "ball"
+                    ? "#f8fafc"
+                    : p.label === "referee"
+                      ? "#111111"
+                      : selected
+                        ? "#fbbf24"
+                        : p.kit || (p.team === "away" ? "#ef4444" : "#38bdf8")
+                }
+                stroke={p.label === "referee" ? "#fbbf24" : "rgba(0,0,0,0.45)"}
                 strokeWidth="0.25"
               />
               {p.label === "player" && (
@@ -218,9 +226,17 @@ function Result({ data }: { data: VideoAnalysis }) {
   return (
     <div className="mt-4 grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        {data.phase && (
+        {data.kickoffDetected && (
+          <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] uppercase text-emerald-300">
+            {t("analysis.kickoff")}
+          </span>
+        )}
+        {data.pitchDetected && (
+          <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] uppercase">{t("analysis.pitch")}</span>
+        )}
+        {data.refereeId != null && (
           <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] uppercase">
-            {t("analysis.phase")}: {data.phase}
+            {t("analysis.referee")} #{data.refereeId}
           </span>
         )}
         {data.formation && (

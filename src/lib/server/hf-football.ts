@@ -1,5 +1,6 @@
 import type { PlayerBox, PlayerDossier, TeamIssue, VideoAnalysis } from "@/lib/video-analysis";
 import { fetchVideoFrames, type VideoFrame } from "./video-frame";
+import { colorDist, grassRatio, rgbHex, shirtColor } from "./frame-pixels";
 
 function token() {
   const fromEnv = (process.env.HF_TOKEN || process.env.HUGGING_FACE_HUB_TOKEN || "").trim();
@@ -69,10 +70,11 @@ function asBoxes(raw: unknown, imgW: number, imgH: number): PlayerBox[] {
       const bh = Math.abs(y2 - y);
       const cx = x + bw / 2;
       const cy = y + bh / 2;
-      const label = String(b.label ?? b.class ?? "player");
+      const rawLabel = String(b.label ?? b.class ?? "person");
+      const isBall = /ball/i.test(rawLabel);
       return {
         id: i + 1,
-        label: /ball/i.test(label) ? "ball" : "player",
+        label: isBall ? "ball" : "player",
         x,
         y,
         w: bw,
@@ -85,7 +87,8 @@ function asBoxes(raw: unknown, imgW: number, imgH: number): PlayerBox[] {
       };
     })
     .filter((b) => {
-      if (b.label !== "ball" && b.label !== "player") return false;
+      if (b.label === "ball") return b.confidence >= 0.12 && b.w >= 3 && b.h >= 3;
+      if (b.label !== "player") return false;
       if (b.confidence < 0.18) return false;
       if (b.w < 8 || b.h < 10) return false;
       return true;
@@ -129,12 +132,75 @@ function pickStat(v: number | null, fallback: number, min = 1) {
   return Math.round(v);
 }
 
-function assignTeams(boxes: PlayerBox[]) {
-  const players = boxes.filter((b) => b.label === "player");
-  if (!players.length) return boxes;
-  const xs = players.map((b) => b.pitchX ?? 50).sort((a, b) => a - b);
-  const mid = xs[Math.floor(xs.length / 2)] ?? 50;
-  return boxes.map((b) => (b.label === "ball" ? b : { ...b, team: (b.pitchX ?? 50) < mid ? "home" : "away" }));
+function assignTeams(boxes: PlayerBox[], frame?: VideoFrame) {
+  const people = boxes.filter((b) => b.label === "player");
+  if (!people.length) return { boxes, homeKit: null as string | null, awayKit: null as string | null, refereeId: null as number | null };
+  if (!frame) {
+    const xs = people.map((b) => b.pitchX ?? 50).sort((a, b) => a - b);
+    const mid = xs[Math.floor(xs.length / 2)] ?? 50;
+    return {
+      boxes: boxes.map((b) => (b.label === "ball" ? b : { ...b, team: (b.pitchX ?? 50) < mid ? "home" : "away" })),
+      homeKit: null,
+      awayKit: null,
+      refereeId: null,
+    };
+  }
+  const samples = people.map((p) => ({ p, c: shirtColor(frame, p) }));
+  let refereeId: number | null = null;
+  for (const s of samples) {
+    const yellow = s.c.r > 170 && s.c.g > 150 && s.c.b < 120;
+    const black = s.c.lum < 40;
+    if ((yellow || black) && refereeId == null) refereeId = s.p.id;
+  }
+  const field = samples.filter((s) => s.p.id !== refereeId);
+  if (field.length < 2) {
+    return {
+      boxes: boxes.map((b) => (b.id === refereeId ? { ...b, label: "referee", team: "ref", role: "referee" } : { ...b, team: b.label === "ball" ? null : "home" })),
+      homeKit: field[0] ? rgbHex(field[0].c) : null,
+      awayKit: null,
+      refereeId,
+    };
+  }
+  let c0 = field[0].c;
+  let c1 = field[1].c;
+  let best = -1;
+  for (let i = 0; i < field.length; i++) {
+    for (let j = i + 1; j < field.length; j++) {
+      const d = colorDist(field[i].c, field[j].c);
+      if (d > best) {
+        best = d;
+        c0 = field[i].c;
+        c1 = field[j].c;
+      }
+    }
+  }
+  const homeKit = rgbHex(c0);
+  const awayKit = rgbHex(c1);
+  const teamOf = (id: number) => {
+    const s = field.find((x) => x.p.id === id);
+    if (!s) return null;
+    return colorDist(s.c, c0) <= colorDist(s.c, c1) ? "home" : "away";
+  };
+  return {
+    boxes: boxes.map((b) => {
+      if (b.id === refereeId) return { ...b, label: "referee", team: "ref", role: "referee", kit: "#111111" };
+      if (b.label === "ball") return b;
+      const team = teamOf(b.id) ?? ((b.pitchX ?? 50) < 50 ? "home" : "away");
+      return { ...b, team, kit: team === "home" ? homeKit : awayKit };
+    }),
+    homeKit,
+    awayKit,
+    refereeId,
+  };
+}
+
+function kickoffFromBoxes(boxes: PlayerBox[], grass: number) {
+  const ball = boxes.find((b) => b.label === "ball");
+  const people = boxes.filter((b) => b.label === "player");
+  const left = people.filter((p) => (p.pitchX ?? 50) < 48).length;
+  const right = people.filter((p) => (p.pitchX ?? 50) > 52).length;
+  const ballCenter = ball ? Math.abs((ball.pitchX ?? 50) - 50) < 14 && Math.abs((ball.pitchY ?? 50) - 50) < 16 : false;
+  return grass >= 0.18 && people.length >= 6 && left >= 2 && right >= 2 && (ballCenter || !ball);
 }
 
 function gaussianHeat(boxes: PlayerBox[], cols = 48, rows = 30, sigma = 2.6) {
@@ -450,7 +516,8 @@ Players:
 ${lines}
 Return ONE JSON object only, no markdown.
 {
-  "phase": "attack|defense|transition|set_piece",
+  "phase": "kickoff|attack|defense|transition|set_piece",
+  "kickoff": false,
   "formationHome": "e.g. 4-3-3",
   "formationAway": "e.g. 4-2-3-1",
   "possession": {"home":55,"away":45},
@@ -475,7 +542,8 @@ Return ONE JSON object only, no markdown.
     "recommendation": "trial|monitor|pass"
   }]
 }
-Judge only what is visible. Never label every player as goalkeeper. Running distance must be realistic clip estimates, not zeros. Numbers are clip-level, not 90-minute totals.`;
+Judge only what is visible. If the ball is on the centre spot and both teams are in shape, phase is kickoff.
+Never label every player as goalkeeper. Do not skip outfield players. Running must not be zeros.`;
 }
 
 async function bestFrame(pageUrl: string, hf: string) {
@@ -505,10 +573,12 @@ export async function analyzeStream(_streamUrl: string, pageUrl: string, quality
     .slice(0, 16)
     .map((b, i) => ({ ...b, id: i + 1 }));
   const balls = raw.filter((b) => b.label === "ball").map((b, i) => ({ ...b, id: players.length + i + 1 }));
-  const numbered = assignTeams(players).concat(balls);
+  const tagged = assignTeams(players.concat(balls), frame);
+  const numbered = tagged.boxes;
   if (!players.length) throw new Error("No players found on this still. Use a match clip, not a trailer.");
   const heat = gaussianHeat(numbered);
   const spread = spreadMetrics(numbered);
+  const grass = grassRatio(frame);
   const bases = numbered.filter((b) => b.label === "player").map(fallbackDossier);
   const scout = await scoutWithVision(frame, hf, squadPrompt(frame, numbered));
   const visionPlayers = Array.isArray(scout?.players) ? scout.players : [];
@@ -572,6 +642,11 @@ export async function analyzeStream(_streamUrl: string, pageUrl: string, quality
     teamIssues,
     radar: dossiers[0]?.radar ?? null,
     notes: teamIssues[0]?.problem ?? null,
+    kickoffDetected: kickoffFromBoxes(numbered, grass) || scout?.phase === "kickoff" || scout?.kickoff === true,
+    pitchDetected: grass >= 0.16,
+    refereeId: tagged.refereeId,
+    homeKit: tagged.homeKit,
+    awayKit: tagged.awayKit,
   };
 }
 

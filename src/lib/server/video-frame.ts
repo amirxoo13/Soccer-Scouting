@@ -1,6 +1,9 @@
+import { cropSpriteCell, grassRatio } from "./frame-pixels";
+
 export type VideoFrame = { bytes: Buffer; mime: string; source: string; width: number; height: number };
 
-const UA = "Mozilla/5.0 (compatible; SoccerScouting/1.0; +https://soccer-scouting.vercel.app)";
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
 export function youtubeId(raw: string) {
   try {
@@ -83,19 +86,58 @@ function imageSize(buf: Buffer, mime: string): { width: number; height: number }
   return { width: 1280, height: 720 };
 }
 
+async function youtubeStoryboardFrames(videoId: string): Promise<VideoFrame[]> {
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: { "user-agent": UA, "accept-language": "en" },
+      redirect: "follow",
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const specMatch =
+      html.match(/playerStoryboardSpecRenderer":\{"spec":"([^"]+)"/) ||
+      html.match(/"storyboard_spec":"([^"]+)"/);
+    if (!specMatch) return [];
+    const spec = specMatch[1]
+      .replace(/\\u0026/g, "&")
+      .replace(/\\\//g, "/")
+      .replace(/\\+/g, "");
+    const parts = spec.split("|");
+    if (parts.length < 3) return [];
+    const base = parts[0];
+    const level = parts[Math.min(3, parts.length - 1)];
+    const bits = level.split("#");
+    const cols = Number(bits[3] || 5) || 5;
+    const rows = Number(bits[4] || 5) || 5;
+    const sigh = bits[bits.length - 1] || "";
+    const out: VideoFrame[] = [];
+    for (const m of [1, 2, 3]) {
+      let url = base.replace("$L", String(Math.min(2, parts.length - 2))).replace("$N", `M${m}`);
+      if (sigh && !url.includes("sigh=")) url += (url.includes("?") ? "&" : "?") + `sigh=${sigh}`;
+      const sprite = await loadFrame(url);
+      if (!sprite) continue;
+      const picks = [Math.floor((cols * rows) / 3), Math.floor((cols * rows) / 2), Math.floor((cols * rows) * 0.7)];
+      for (const idx of picks) {
+        const cell = cropSpriteCell(sprite, cols, rows, idx);
+        if (cell) out.push(cell);
+      }
+      if (out.length >= 6) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export async function collectFrameUrls(pageUrl: string): Promise<string[]> {
   const out: string[] = [];
   const yt = youtubeId(pageUrl);
   if (yt) {
     out.push(
-      `https://i.ytimg.com/vi/${yt}/1.jpg`,
       `https://i.ytimg.com/vi/${yt}/2.jpg`,
       `https://i.ytimg.com/vi/${yt}/3.jpg`,
-      `https://i.ytimg.com/vi/${yt}/0.jpg`,
-      `https://i.ytimg.com/vi/${yt}/mqdefault.jpg`,
+      `https://i.ytimg.com/vi/${yt}/1.jpg`,
       `https://i.ytimg.com/vi/${yt}/sddefault.jpg`,
-      `https://i.ytimg.com/vi/${yt}/hqdefault.jpg`,
-      `https://i.ytimg.com/vi/${yt}/maxresdefault.jpg`,
     );
   }
   const aparat = aparatHash(pageUrl);
@@ -104,7 +146,7 @@ export async function collectFrameUrls(pageUrl: string): Promise<string[]> {
       const thumb = await oembedThumb(
         `https://www.aparat.com/oembed?url=${encodeURIComponent(`https://www.aparat.com/v/${aparat}`)}&format=json`,
       );
-      if (thumb) out.unshift(thumb);
+      if (thumb) out.push(thumb);
     } catch {
       /* ignore */
     }
@@ -114,7 +156,7 @@ export async function collectFrameUrls(pageUrl: string): Promise<string[]> {
     out.push(`https://vumbnail.com/${vimeo}.jpg`);
     try {
       const thumb = await oembedThumb(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(pageUrl)}`);
-      if (thumb) out.unshift(thumb);
+      if (thumb) out.push(thumb);
     } catch {
       /* ignore */
     }
@@ -122,7 +164,7 @@ export async function collectFrameUrls(pageUrl: string): Promise<string[]> {
   try {
     if (/dailymotion|dai\.ly/i.test(pageUrl)) {
       const thumb = await oembedThumb(`https://www.dailymotion.com/services/oembed?url=${encodeURIComponent(pageUrl)}`);
-      if (thumb) out.unshift(thumb);
+      if (thumb) out.push(thumb);
     }
   } catch {
     /* ignore */
@@ -150,24 +192,31 @@ async function loadFrame(url: string): Promise<VideoFrame | null> {
 }
 
 export async function fetchVideoFrames(pageUrl: string, limit = 3): Promise<VideoFrame[]> {
+  const yt = youtubeId(pageUrl);
+  const story = yt ? await youtubeStoryboardFrames(yt) : [];
   const urls = await collectFrameUrls(pageUrl);
-  const frames: VideoFrame[] = [];
-  const seen = new Set<string>();
+  const loaded: VideoFrame[] = [...story];
+  const seen = new Set(story.map((f) => `${f.width}x${f.height}:${f.bytes.length}`));
   for (const url of urls) {
-    if (frames.length >= limit) break;
+    if (loaded.length >= 10) break;
     try {
       const frame = await loadFrame(url);
       if (!frame) continue;
       const key = `${frame.width}x${frame.height}:${frame.bytes.length}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      frames.push(frame);
+      loaded.push(frame);
     } catch {
       /* next */
     }
   }
-  if (!frames.length) throw new Error("Could not fetch a still from this video");
-  return frames;
+  if (!loaded.length) throw new Error("Could not fetch a still from this video");
+  const ranked = loaded
+    .map((frame) => ({ frame, grass: grassRatio(frame) }))
+    .sort((a, b) => b.grass - a.grass);
+  const playable = ranked.filter((r) => r.grass >= 0.16);
+  const pick = (playable.length ? playable : ranked).slice(0, limit);
+  return pick.map((p) => p.frame);
 }
 
 export async function fetchVideoFrame(pageUrl: string): Promise<VideoFrame> {
