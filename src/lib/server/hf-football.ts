@@ -594,7 +594,6 @@ JSON only:
 }
 Never use the word Unknown. Never return empty strengths.`;
 }
-}
 
 function boxesFromPeople(raw: unknown, frame: VideoFrame): PlayerBox[] {
   const list = Array.isArray(raw) ? raw : [];
@@ -701,7 +700,7 @@ export async function analyzeStream(_streamUrl: string, pageUrl: string, quality
   const issueRaw = Array.isArray(scout?.teamIssues) ? scout.teamIssues : [];
   const mappedIssues: TeamIssue[] = issueRaw
     .slice(0, 6)
-    .map((item) => {
+    .map((item): TeamIssue => {
       const o = obj(item);
       const team = o.team === "away" || o.team === "home" || o.team === "both" ? o.team : "both";
       const severity = o.severity === "high" || o.severity === "medium" || o.severity === "low" ? o.severity : "medium";

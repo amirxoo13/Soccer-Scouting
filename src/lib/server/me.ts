@@ -43,11 +43,13 @@ export const getMe = createServerFn({ method: "GET" })
           .map((v) => Number(v.id))
           .filter((id) => Number.isFinite(id));
         if (deadIds.length) {
-          await sql`
-            update player_videos
-            set analysis_json = null, analysis_status = 'idle', analysis_error = null
-            where id in ${sql(deadIds)}
-          `;
+          for (const id of deadIds) {
+            await sql`
+              update player_videos
+              set analysis_json = null, analysis_status = 'idle', analysis_error = null
+              where id = ${id}
+            `;
+          }
         }
         profile = mapProfile(row, mappedVideos.map((v) => (deadIds.includes(v.id) ? { ...v, analysis: null, analysisStatus: "idle" } : v)));
       }

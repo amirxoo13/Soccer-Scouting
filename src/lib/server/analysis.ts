@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
-import type { AnalysisStatus, VideoAnalysis } from "@/lib/video-analysis";
+import type { AnalysisStatus } from "@/lib/video-analysis";
 import { sanitizeAnalysis } from "@/lib/video-analysis";
 
 export const enqueueVideoAnalysis = createServerFn({ method: "POST" })
