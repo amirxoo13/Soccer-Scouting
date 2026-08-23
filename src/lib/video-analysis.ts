@@ -140,3 +140,18 @@ export type VideoAnalysis = {
 export function isPendingStatus(s: AnalysisStatus | string | null | undefined) {
   return s === "queued" || s === "running";
 }
+
+export function isUselessIssue(problem: string, zone?: string) {
+  return (
+    zone === "frame" ||
+    problem === "tightHint" ||
+    /too tight|wide match clip|pitch can be read/i.test(problem)
+  );
+}
+
+export function isBlockedAnalysis(a: VideoAnalysis | null | undefined) {
+  if (!a) return false;
+  const issues = a.teamIssues ?? [];
+  const blocked = issues.some((i) => isUselessIssue(i.problem || "", i.zone));
+  return blocked && !(a.dossiers && a.dossiers.length);
+}

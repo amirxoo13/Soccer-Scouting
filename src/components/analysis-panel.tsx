@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Radar } from "lucide-react";
 import { enqueueVideoAnalysis, getVideoAnalysis } from "@/lib/server/analysis";
 import {
+  isBlockedAnalysis,
   isPendingStatus,
+  isUselessIssue,
   type AnalysisStatus,
   type PlayerBox,
   type PlayerDossier,
@@ -221,6 +223,7 @@ function PlayerReport({ player }: { player: PlayerDossier }) {
 function Result({ data }: { data: VideoAnalysis }) {
   const { t } = useI18n();
   const dossiers = data.dossiers ?? [];
+  const issues = (data.teamIssues ?? []).filter((issue) => !isUselessIssue(issue.problem, issue.zone));
   const [selectedId, setSelectedId] = useState<number>(dossiers[0]?.id ?? data.playerBoxes.find((b) => b.label === "player")?.id ?? 1);
   const selected = useMemo(() => dossiers.find((d) => d.id === selectedId) ?? dossiers[0], [dossiers, selectedId]);
   return (
@@ -264,15 +267,15 @@ function Result({ data }: { data: VideoAnalysis }) {
         <PitchMap grid={data.heatmap} players={data.playerBoxes ?? []} selectedId={selectedId} onPick={setSelectedId} />
       ) : null}
 
-      {!!data.teamIssues?.length && (
+      {!!issues.length && (
         <div className="grid gap-2">
           <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{t("analysis.teamIssues")}</p>
-          {data.teamIssues.map((issue, i) => (
+          {issues.map((issue, i) => (
             <div key={`${issue.zone}-${i}`} className="rounded-lg border border-border bg-card/70 px-3 py-2">
               <p className="text-[11px] uppercase tracking-wide text-amber-300">
                 {issue.team} · {issue.zone} · {issue.severity}
               </p>
-              <p className="mt-1 text-sm">{issue.problem === "tightHint" ? t("analysis.tightHint") : issue.problem}</p>
+              <p className="mt-1 text-sm">{issue.problem}</p>
             </div>
           ))}
         </div>
@@ -333,8 +336,15 @@ export function AnalysisPanel({
 
   const status = (q.data?.status ?? initialStatus ?? "idle") as AnalysisStatus;
   const analysis = q.data?.analysis ?? initialAnalysis ?? null;
+  const blocked = isBlockedAnalysis(analysis);
   const pending = isPendingStatus(status) || run.isPending;
-  const ready = analysis && (status === "analyzed" || (status === "awaiting_mark" && analysis.dossiers?.length));
+  const ready = !blocked && analysis && (status === "analyzed" || (status === "awaiting_mark" && analysis.dossiers?.length));
+
+  useEffect(() => {
+    if (!canRun || !videoId || pending || !blocked) return;
+    if (status === "failed" || status === "extraction_failed") return;
+    run.mutate();
+  }, [blocked, canRun, pending, status, videoId]);
 
   return (
     <div className="mt-3 rounded-xl border border-border bg-background/70 p-4">

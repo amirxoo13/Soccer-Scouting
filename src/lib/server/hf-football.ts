@@ -699,20 +699,21 @@ export async function analyzeStream(_streamUrl: string, pageUrl: string, quality
   const visionOk = visionPlayers.length >= 1;
   const dossiers = bases.map((b) => (visionOk ? mergeDossier(b, byId.get(b.id)) : b));
   const issueRaw = Array.isArray(scout?.teamIssues) ? scout.teamIssues : [];
-  const mappedIssues: TeamIssue[] = issueRaw.slice(0, 6).map((item) => {
-    const o = obj(item);
-    const team = o.team === "away" || o.team === "home" || o.team === "both" ? o.team : "both";
-    const severity = o.severity === "high" || o.severity === "medium" || o.severity === "low" ? o.severity : "medium";
-    return {
-      team,
-      zone: typeof o.zone === "string" ? o.zone : "pitch",
-      severity,
-      problem: typeof o.problem === "string" ? o.problem : "",
-    };
-  });
-  const teamIssues: TeamIssue[] = mappedIssues.length ? mappedIssues.concat(
-    players.length < 6 ? fallbackIssues(numbered).filter((i) => i.problem === "tightHint") : [],
-  ) : fallbackIssues(numbered);
+  const mappedIssues: TeamIssue[] = issueRaw
+    .slice(0, 6)
+    .map((item) => {
+      const o = obj(item);
+      const team = o.team === "away" || o.team === "home" || o.team === "both" ? o.team : "both";
+      const severity = o.severity === "high" || o.severity === "medium" || o.severity === "low" ? o.severity : "medium";
+      return {
+        team,
+        zone: typeof o.zone === "string" ? o.zone : "pitch",
+        severity,
+        problem: typeof o.problem === "string" ? o.problem : "",
+      };
+    })
+    .filter((i) => i.problem && i.zone !== "frame" && !/too tight|wide match clip|pitch can be read/i.test(i.problem));
+  const teamIssues: TeamIssue[] = mappedIssues.length ? mappedIssues : fallbackIssues(numbered).filter((i) => i.problem !== "tightHint");
   const poss = obj(scout?.possession);
   const home = dossiers.filter((d) => d.team === "home");
   const away = dossiers.filter((d) => d.team === "away");
