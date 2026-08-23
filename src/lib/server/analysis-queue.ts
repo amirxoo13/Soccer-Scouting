@@ -119,7 +119,10 @@ async function processJob(job: {
   }
 
   try {
-    const analysis = await analyzeStream(streamUrl, job.video_url, quality);
+    const { scoutEngineUrl, analyzeOnScoutEngine } = await import("./scout-engine");
+    const analysis = scoutEngineUrl()
+      ? await analyzeOnScoutEngine(job.video_url)
+      : await analyzeStream(streamUrl, job.video_url, quality);
     await sql`
       update video_analysis_jobs
       set status = 'analyzed', last_error = null, updated_at = now()
@@ -162,21 +165,24 @@ export async function enqueueJob(userId: string, videoId: number, videoUrl: stri
     returning id
   `;
   await setVideoStatus(videoId, "queued", { json: null, error: null });
+  const payload = {
+    id: job.id,
+    video_id: videoId,
+    user_id: userId,
+    video_url: videoUrl,
+    attempts: 0,
+  };
   if (process.env.VERCEL) {
-    await processJob({
-      id: job.id,
-      video_id: videoId,
-      user_id: userId,
-      video_url: videoUrl,
-      attempts: 0,
-    });
+    try {
+      const { waitUntil } = await import("@vercel/functions");
+      waitUntil(processJob(payload));
+    } catch {
+      void processJob(payload);
+    }
   } else {
     void tick();
   }
-  const [fresh] = await sql<{ status: string }>`
-    select analysis_status as status from player_videos where id = ${videoId}
-  `;
-  return { jobId: job.id, status: (fresh?.status ?? "queued") as AnalysisStatus };
+  return { jobId: job.id, status: "queued" as AnalysisStatus };
 }
 
 

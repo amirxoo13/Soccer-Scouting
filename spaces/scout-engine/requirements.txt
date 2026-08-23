@@ -1,0 +1,8 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+yt-dlp
+ultralytics==8.3.146
+opencv-python-headless==4.11.0.86
+numpy==2.2.5
+requests==2.32.3
+huggingface_hub==0.34.4
