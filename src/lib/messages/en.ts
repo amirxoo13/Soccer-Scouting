@@ -327,6 +327,7 @@ export const en = {
     kickoff: "Kick-off detected",
     pitch: "Pitch + lines",
     referee: "Referee",
+    teamIssues: "Team problems on the pitch",
     tightHint: "This camera is tight, so only the players in frame were scouted.",
     home: "Home",
     away: "Away",

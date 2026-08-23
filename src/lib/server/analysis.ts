@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
 import type { AnalysisStatus, VideoAnalysis } from "@/lib/video-analysis";
+import { sanitizeAnalysis } from "@/lib/video-analysis";
 
 export const enqueueVideoAnalysis = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -33,12 +34,14 @@ export const getVideoAnalysis = createServerFn({ method: "GET" })
       where v.id = ${data.videoId} and p.user_id = ${context.userId}
     `;
     if (!row) throw new Error("Video not found");
+    const analysis = sanitizeAnalysis(row.analysis_json);
+    const hasReport = !!analysis?.dossiers?.length;
     return {
       videoId: row.id,
       videoUrl: row.youtube_url,
-      status: row.analysis_status as AnalysisStatus,
+      status: (hasReport ? row.analysis_status : "idle") as AnalysisStatus,
       error: row.analysis_error,
       analyzedAt: row.analyzed_at,
-      analysis: (row.analysis_json ?? null) as VideoAnalysis | null,
+      analysis: hasReport ? analysis : null,
     };
   });

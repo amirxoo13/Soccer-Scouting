@@ -142,16 +142,26 @@ export function isPendingStatus(s: AnalysisStatus | string | null | undefined) {
 }
 
 export function isUselessIssue(problem: string, zone?: string) {
+  const text = `${zone || ""} ${problem || ""}`;
   return (
-    zone === "frame" ||
+    /(?:^|\s)frame(?:\s|$)/i.test(zone || "") ||
     problem === "tightHint" ||
-    /too tight|wide match clip|pitch can be read/i.test(problem)
+    /too tight|wide match clip|pitch can be read|every player on the pitch/i.test(text)
   );
+}
+
+export function sanitizeAnalysis(raw: unknown): VideoAnalysis | null {
+  if (!raw || typeof raw !== "object") return null;
+  const a = raw as VideoAnalysis;
+  const teamIssues = (a.teamIssues ?? []).filter((i) => !isUselessIssue(i.problem || "", i.zone));
+  const notes = a.notes && isUselessIssue(String(a.notes), "") ? null : a.notes;
+  return { ...a, teamIssues, notes };
 }
 
 export function isBlockedAnalysis(a: VideoAnalysis | null | undefined) {
   if (!a) return false;
+  const dossiers = a.dossiers ?? [];
+  if (dossiers.length > 0) return false;
   const issues = a.teamIssues ?? [];
-  const blocked = issues.some((i) => isUselessIssue(i.problem || "", i.zone));
-  return blocked && !(a.dossiers && a.dossiers.length);
+  return issues.some((i) => isUselessIssue(i.problem || "", i.zone)) || isUselessIssue(String(a.notes || ""), "");
 }

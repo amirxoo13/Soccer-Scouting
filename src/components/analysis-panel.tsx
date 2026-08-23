@@ -338,7 +338,7 @@ export function AnalysisPanel({
   const analysis = q.data?.analysis ?? initialAnalysis ?? null;
   const blocked = isBlockedAnalysis(analysis);
   const pending = isPendingStatus(status) || run.isPending;
-  const ready = !blocked && analysis && (status === "analyzed" || (status === "awaiting_mark" && analysis.dossiers?.length));
+  const ready = Boolean(analysis?.dossiers?.length) && !blocked && (status === "analyzed" || status === "awaiting_mark");
 
   useEffect(() => {
     if (!canRun || !videoId || pending || !blocked) return;
