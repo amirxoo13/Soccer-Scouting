@@ -297,7 +297,7 @@ export const en = {
     videoUrl: "Video link",
     videoTitle: "Video title",
     addVideo: "Add video",
-    videoHelp: "Paste public links — up to 24 clips. They play here and are never stored as files. YouTube, Aparat, Vimeo, Dailymotion, Twitch, Streamable, Facebook or a direct .mp4. Use Analyse to queue tactical processing in the background.",
+    videoHelp: "Paste public links — up to 24 clips. They play here and are never stored as files. YouTube, Aparat, Vimeo, Dailymotion, Twitch, Streamable, Facebook or a direct .mp4.",
     tmTitle: "Match a professional record",
     tmHelp: "Search Transfermarkt to fill name, date of birth, height, foot, position and club history. Used to verify professional players faster.",
     tmSearch: "Search",

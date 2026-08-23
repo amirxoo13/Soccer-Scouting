@@ -36,7 +36,9 @@ function Home() {
           <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted-foreground md:text-base">{t("hero.body")}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg" className="w-full sm:w-auto">
-              <Link to="/login">{t("hero.ctaPlayer")}</Link>
+              <Link to="/login" search={{ next: "/app/profile" }}>
+                {t("hero.ctaPlayer")}
+              </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
               <Link to="/login" search={{ next: "/app/wallet?plan=desk" }}>
@@ -208,7 +210,9 @@ function Home() {
             <h3 className="font-display text-3xl">{t("split.playerTitle")}</h3>
             <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{t("split.playerBody")}</p>
             <Button asChild className="mt-8 w-fit">
-              <Link to="/login">{t("hero.ctaPlayer")}</Link>
+              <Link to="/login" search={{ next: "/app/profile" }}>
+                {t("hero.ctaPlayer")}
+              </Link>
             </Button>
           </div>
           <div className="flex flex-col border-t border-border p-8 md:border-t-0 md:border-s md:p-10">
@@ -257,7 +261,9 @@ function Home() {
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <Button asChild size="lg" className="w-full sm:w-auto">
-              <Link to="/login">{t("hero.ctaPlayer")}</Link>
+              <Link to="/login" search={{ next: "/app/profile" }}>
+                {t("hero.ctaPlayer")}
+              </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="w-full sm:w-auto">
               <Link to="/login" search={{ next: "/app/wallet?plan=desk" }}>

@@ -43,7 +43,7 @@ export function SiteFooter() {
         <div className="md:col-span-2">
           <p className="text-xs tracking-widest text-muted-foreground">{t("footer.players")}</p>
           <div className="mt-3 flex flex-col gap-2 text-sm">
-            <Link to="/login" className="text-foreground/90 hover:text-foreground">
+            <Link to="/login" search={{ next: "/app/profile" }} className="text-foreground/90 hover:text-foreground">
               {t("hero.ctaPlayer")}
             </Link>
             <Link to="/discover" className="text-foreground/90 hover:text-foreground">
@@ -54,7 +54,7 @@ export function SiteFooter() {
         <div className="md:col-span-2">
           <p className="text-xs tracking-widest text-muted-foreground">{t("footer.clubs")}</p>
           <div className="mt-3 flex flex-col gap-2 text-sm">
-            <Link to="/login" className="text-foreground/90 hover:text-foreground">
+            <Link to="/login" search={{ next: "/app/wallet?plan=desk" }} className="text-foreground/90 hover:text-foreground">
               {t("hero.ctaScout")}
             </Link>
             <a href="/#positions" className="text-foreground/90 hover:text-foreground">

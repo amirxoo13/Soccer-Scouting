@@ -1,10 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Field } from "@/components/field";
 import { VideoEmbed } from "@/components/video-embed";
-import { AnalysisPanel } from "@/components/analysis-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -141,6 +140,7 @@ function ProfileEditor() {
   });
 
   if (mine.isPending) return <Skeleton className="h-40 w-full" />;
+  if (mine.isError) return <Navigate to="/app" />;
   if (!form) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -473,26 +473,6 @@ function ProfileEditor() {
                 </Field>
               </div>
               {v.youtubeUrl && parseVideoUrl(v.youtubeUrl) && <VideoEmbed url={v.youtubeUrl} title={v.title} />}
-              {v.id ? (
-                <AnalysisPanel
-                  videoId={v.id}
-                  videoUrl={v.youtubeUrl}
-                  canRun={!locked}
-                  initialStatus={
-                    (mine.data?.videos.find((x) => x.id === v.id)?.analysisStatus as
-                      | "idle"
-                      | "queued"
-                      | "running"
-                      | "analyzed"
-                      | "extraction_failed"
-                      | "failed"
-                      | undefined) ?? "idle"
-                  }
-                  initialAnalysis={mine.data?.videos.find((x) => x.id === v.id)?.analysis ?? null}
-                />
-              ) : (
-                <p className="text-xs text-muted-foreground">{t("analysis.saveFirst")}</p>
-              )}
             </div>
           ))}
           <Button

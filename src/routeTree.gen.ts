@@ -15,7 +15,6 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as DiscoverRouteImport } from './routes/discover'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as ApiAnalyzeRouteImport } from './routes/api/analyze'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
 import { Route as AppShortlistRouteImport } from './routes/app.shortlist'
@@ -51,11 +50,6 @@ const LoginRoute = LoginRouteImport.update({
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAnalyzeRoute = ApiAnalyzeRouteImport.update({
-  id: '/api/analyze',
-  path: '/api/analyze',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -96,7 +90,6 @@ export interface FileRoutesByFullPath {
   '/discover': typeof DiscoverRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/api/analyze': typeof ApiAnalyzeRoute
   '/app/profile': typeof AppProfileRoute
   '/app/shortlist': typeof AppShortlistRoute
   '/app/wallet': typeof AppWalletRoute
@@ -110,7 +103,6 @@ export interface FileRoutesByTo {
   '/discover': typeof DiscoverRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/api/analyze': typeof ApiAnalyzeRoute
   '/app/profile': typeof AppProfileRoute
   '/app/shortlist': typeof AppShortlistRoute
   '/app/wallet': typeof AppWalletRoute
@@ -126,7 +118,6 @@ export interface FileRoutesById {
   '/discover': typeof DiscoverRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/api/analyze': typeof ApiAnalyzeRoute
   '/app/profile': typeof AppProfileRoute
   '/app/shortlist': typeof AppShortlistRoute
   '/app/wallet': typeof AppWalletRoute
@@ -143,7 +134,6 @@ export interface FileRouteTypes {
     | '/discover'
     | '/login'
     | '/onboarding'
-    | '/api/analyze'
     | '/app/profile'
     | '/app/shortlist'
     | '/app/wallet'
@@ -157,7 +147,6 @@ export interface FileRouteTypes {
     | '/discover'
     | '/login'
     | '/onboarding'
-    | '/api/analyze'
     | '/app/profile'
     | '/app/shortlist'
     | '/app/wallet'
@@ -172,7 +161,6 @@ export interface FileRouteTypes {
     | '/discover'
     | '/login'
     | '/onboarding'
-    | '/api/analyze'
     | '/app/profile'
     | '/app/shortlist'
     | '/app/wallet'
@@ -188,7 +176,6 @@ export interface RootRouteChildren {
   DiscoverRoute: typeof DiscoverRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
-  ApiAnalyzeRoute: typeof ApiAnalyzeRoute
   PlayersIdRoute: typeof PlayersIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -235,13 +222,6 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof OnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/analyze': {
-      id: '/api/analyze'
-      path: '/api/analyze'
-      fullPath: '/api/analyze'
-      preLoaderRoute: typeof ApiAnalyzeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/': {
@@ -312,7 +292,6 @@ const rootRouteChildren: RootRouteChildren = {
   DiscoverRoute: DiscoverRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
-  ApiAnalyzeRoute: ApiAnalyzeRoute,
   PlayersIdRoute: PlayersIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

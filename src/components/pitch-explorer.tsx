@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { POSITIONS, WIDE_PITCH_COORDS, labeled } from "@/lib/football";
 import { useI18n } from "@/lib/i18n";
@@ -92,6 +93,9 @@ export function PitchExplorer() {
             {labeled(POSITIONS, position, locale)}
             <span className="mx-2 text-border">·</span>
             {t("positions.locked")}
+            <Link to="/discover" search={{ position }} className="ms-3 text-primary hover:underline">
+              {t("nav.discover")}
+            </Link>
           </p>
           {results.data && results.data.access === false && (
             <Paywall loggedIn={Boolean(access.data?.loggedIn)} />

@@ -10,7 +10,6 @@ import type {
   ScoutStatus,
   UserRole,
 } from "@/lib/types";
-import { sanitizeAnalysis } from "@/lib/video-analysis";
 
 function str(v: unknown): string | null {
   if (v == null) return null;
@@ -80,8 +79,6 @@ export function mapCard(row: Record<string, unknown>): PlayerCard {
 }
 
 export function mapVideo(row: Record<string, unknown>): PlayerVideo {
-  const cleaned = sanitizeAnalysis(row.analysis_json);
-  const hasReport = !!cleaned?.dossiers?.length;
   return {
     id: Number(row.id),
     youtubeUrl: String(row.youtube_url),
@@ -90,10 +87,6 @@ export function mapVideo(row: Record<string, unknown>): PlayerVideo {
     category: str(row.category),
     sortOrder: num(row.sort_order) ?? 0,
     playCount: num(row.play_count) ?? 0,
-    analysisStatus: hasReport ? str(row.analysis_status) ?? "idle" : "idle",
-    analysis: hasReport ? cleaned : null,
-    analysisError: str(row.analysis_error),
-    analyzedAt: str(row.analyzed_at),
   };
 }
 

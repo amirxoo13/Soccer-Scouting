@@ -59,6 +59,7 @@ function AppLayout() {
   const role = me.data?.user?.role;
   const links = [
     { to: "/app", label: t("nav.dashboard") },
+    { to: "/discover", label: t("nav.discover") },
     ...(role === "player" ? [{ to: "/app/profile", label: t("nav.profile") }] : []),
     ...(role === "scout" || me.data?.user?.isAdmin ? [{ to: "/app/shortlist", label: t("nav.shortlist") }] : []),
     { to: "/app/wallet", label: t("nav.wallet") },

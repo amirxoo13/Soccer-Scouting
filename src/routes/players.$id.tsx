@@ -18,9 +18,7 @@ import { getAccess } from "@/lib/server/billing";
 import { getPublicPlayer, searchPlayers } from "@/lib/server/public";
 import { sendContact, toggleWatchlist, watchlistIds } from "@/lib/server/scout";
 import { ageFromDob } from "@/lib/utils";
-import type { AnalysisStatus } from "@/lib/video-analysis";
 import { VideoEmbed } from "@/components/video-embed";
-import { AnalysisPanel } from "@/components/analysis-panel";
 import { videoThumb } from "@/lib/video-embed";
 
 export const Route = createFileRoute("/players/$id")({ component: PlayerPage });
@@ -382,15 +380,6 @@ function PlayerPage() {
                   <div className="p-4">
                     <div className="font-medium">{video?.title}</div>
                     <div className="mt-1 text-xs text-muted-foreground">{labeled(VIDEO_CATEGORIES, video?.category ?? null, locale)}</div>
-                    {video && (
-                      <AnalysisPanel
-                        videoId={video.id}
-                        videoUrl={video.youtubeUrl}
-                        canRun={Boolean(user) && p.userId === user?.id}
-                        initialStatus={(video.analysisStatus as AnalysisStatus) ?? "idle"}
-                        initialAnalysis={video.analysis}
-                      />
-                    )}
                   </div>
                 </div>
                 <div className="grid gap-2">
