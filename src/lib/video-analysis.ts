@@ -43,6 +43,51 @@ export type PlayerAttributes = {
   decisionMaking: number;
 };
 
+export type PlayerMatchStats = {
+  distanceM: number;
+  sprints: number;
+  maxSpeedKmh: number;
+  intensity: number;
+  passesCompleted: number;
+  passesAttempted: number;
+  keyPasses: number;
+  passAccuracy: number;
+  positioning: number;
+  tacklesWon: number;
+  tacklesLost: number;
+  shots: number;
+  shotsOnTarget: number;
+  xg: number;
+  defending: number;
+  interceptions: number;
+  chancesCreated: number;
+  chancesWasted: number;
+  duels: number;
+  recoveries: number;
+  touches: number;
+};
+
+export type PlayerDossier = {
+  id: number;
+  team: "home" | "away";
+  position: string;
+  role: string;
+  stats: PlayerMatchStats;
+  radar: RadarScores;
+  attributes: PlayerAttributes;
+  strengths: string[];
+  weaknesses: string[];
+  notes: string;
+  recommendation: string;
+};
+
+export type TeamIssue = {
+  team: "home" | "away" | "both";
+  zone: string;
+  severity: "low" | "medium" | "high";
+  problem: string;
+};
+
 export type VideoAnalysis = {
   playerBoxes: PlayerBox[];
   heatmap: number[][];
@@ -63,6 +108,7 @@ export type VideoAnalysis = {
   playersOnPitch?: number;
   ballDetected?: boolean;
   formation?: string | null;
+  formationAway?: string | null;
   phase?: string | null;
   compactness?: number | null;
   width?: number | null;
@@ -81,6 +127,8 @@ export type VideoAnalysis = {
     touches: number | null;
     maxSpeedKmh: number | null;
   };
+  dossiers?: PlayerDossier[];
+  teamIssues?: TeamIssue[];
 };
 
 export function isPendingStatus(s: AnalysisStatus | string | null | undefined) {

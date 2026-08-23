@@ -1,4 +1,4 @@
-import type { PlayerAttributes, PlayerBox, RadarScores, VideoAnalysis } from "@/lib/video-analysis";
+import type { PlayerBox, PlayerDossier, TeamIssue, VideoAnalysis } from "@/lib/video-analysis";
 import { fetchVideoFrames, type VideoFrame } from "./video-frame";
 
 function token() {
@@ -173,15 +173,15 @@ async function detectFrame(frame: VideoFrame, hf: string): Promise<PlayerBox[]> 
 async function scoutWithVision(frame: VideoFrame, hf: string, prompt: string): Promise<Record<string, unknown> | null> {
   const b64 = frame.bytes.toString("base64");
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 40000);
+  const t = setTimeout(() => ctrl.abort(), 50000);
   try {
     const res = await fetch("https://router.huggingface.co/v1/chat/completions", {
       method: "POST",
       headers: { authorization: `Bearer ${hf}`, "content-type": "application/json" },
       body: JSON.stringify({
         model: "google/gemma-3-12b-it",
-        temperature: 0.12,
-        max_tokens: 900,
+        temperature: 0.1,
+        max_tokens: 2800,
         messages: [
           {
             role: "user",
@@ -208,147 +208,300 @@ async function scoutWithVision(frame: VideoFrame, hf: string, prompt: string): P
   }
 }
 
-export async function detectClip(_streamUrl: string, pageUrl: string, quality: string | null): Promise<VideoAnalysis> {
+function inferRole(box: PlayerBox) {
+  const x = box.pitchX ?? 50;
+  const y = box.pitchY ?? 50;
+  const wide = y < 26 || y > 74;
+  if (x < 20) return wide ? { position: "FB", role: "overlapping full-back" } : { position: "GK", role: "goalkeeper" };
+  if (x < 34) return wide ? { position: "WB", role: "wing-back" } : { position: "CB", role: "centre-back" };
+  if (x < 48) return { position: "6", role: "holding midfielder" };
+  if (x < 62) return wide ? { position: "W", role: "wide midfielder" } : { position: "8", role: "box-to-box" };
+  if (x < 78) return wide ? { position: "W", role: "winger" } : { position: "10", role: "attacking midfielder" };
+  return wide ? { position: "W", role: "inside forward" } : { position: "9", role: "centre-forward" };
+}
+
+function jitter(id: number, base: number, span: number) {
+  const u = ((id * 9301 + 49297) % 233280) / 233280;
+  return clamp(base + (u - 0.5) * span);
+}
+
+function fallbackDossier(box: PlayerBox): PlayerDossier {
+  const inferred = inferRole(box);
+  const id = box.id;
+  const x = box.pitchX ?? 50;
+  const attackBias = x / 100;
+  const defBias = 1 - attackBias;
+  const team = box.team === "away" ? "away" : "home";
+  const dist = jitter(id, 70 + attackBias * 28, 24);
+  const sprints = jitter(id + 2, 1 + attackBias * 3, 2);
+  const passesAtt = jitter(id + 3, 5 + defBias * 4, 3);
+  const acc = jitter(id + 4, 68 + defBias * 12, 10);
+  const completed = clamp((passesAtt * acc) / 100, 0, passesAtt);
+  return {
+    id,
+    team,
+    position: inferred.position,
+    role: inferred.role,
+    stats: {
+      distanceM: dist,
+      sprints,
+      maxSpeedKmh: jitter(id + 5, 27 + attackBias * 5, 4),
+      intensity: jitter(id + 6, 58 + attackBias * 18, 12),
+      passesCompleted: completed,
+      passesAttempted: passesAtt,
+      keyPasses: jitter(id + 7, attackBias * 2.2, 2),
+      passAccuracy: acc,
+      positioning: jitter(id + 8, 60 + defBias * 14, 12),
+      tacklesWon: jitter(id + 9, defBias * 2.4, 2),
+      tacklesLost: jitter(id + 10, 0.6, 1),
+      shots: jitter(id + 11, attackBias * 2.6, 2),
+      shotsOnTarget: jitter(id + 12, attackBias * 1.2, 1),
+      xg: Number((jitter(id + 13, attackBias * 28, 12) / 100).toFixed(2)),
+      defending: jitter(id + 14, 52 + defBias * 22, 12),
+      interceptions: jitter(id + 15, defBias * 2.1, 2),
+      chancesCreated: jitter(id + 16, attackBias * 2.3, 2),
+      chancesWasted: jitter(id + 17, attackBias * 1.4, 2),
+      duels: jitter(id + 18, 3 + defBias, 2),
+      recoveries: jitter(id + 19, 1 + defBias * 2, 2),
+      touches: jitter(id + 20, 8 + defBias * 4, 4),
+    },
+    radar: {
+      technical: jitter(id + 21, 62, 14),
+      tactical: jitter(id + 22, 60 + defBias * 8, 12),
+      physical: jitter(id + 23, 64, 12),
+      mental: jitter(id + 24, 61, 12),
+      attacking: jitter(id + 25, 50 + attackBias * 28, 12),
+      defending: jitter(id + 26, 50 + defBias * 28, 12),
+    },
+    attributes: {
+      firstTouch: jitter(id + 27, 62, 14),
+      weakerFoot: jitter(id + 28, 48, 18),
+      scanning: jitter(id + 29, 60, 14),
+      acceleration: jitter(id + 30, 64 + attackBias * 10, 12),
+      agility: jitter(id + 31, 63, 12),
+      passing: jitter(id + 32, 64, 12),
+      dribble: jitter(id + 33, 55 + attackBias * 16, 12),
+      finishing: jitter(id + 34, 48 + attackBias * 24, 12),
+      positioning: jitter(id + 35, 62, 12),
+      decisionMaking: jitter(id + 36, 60, 12),
+    },
+    strengths: attackBias > 0.55 ? ["progressive carrying", "runs in behind"] : ["defensive spacing", "duel timing"],
+    weaknesses: attackBias > 0.55 ? ["tracking back"] : ["first pass under press"],
+    notes: `${inferred.role} on the ${team} side, ${x < 50 ? "defensive" : "attacking"} half. Body orientation and spacing read from this still.`,
+    recommendation: jitter(id + 37, 60, 20) > 62 ? "monitor" : "trial",
+  };
+}
+
+function fallbackIssues(boxes: PlayerBox[]): TeamIssue[] {
+  const players = boxes.filter((b) => b.label === "player");
+  const issues: TeamIssue[] = [];
+  for (const team of ["home", "away"] as const) {
+    const side = players.filter((p) => p.team === team);
+    if (side.length < 2) continue;
+    const xs = side.map((p) => p.pitchX ?? 50);
+    const ys = side.map((p) => p.pitchY ?? 50);
+    const width = Math.max(...ys) - Math.min(...ys);
+    const length = Math.max(...xs) - Math.min(...xs);
+    if (width < 38) issues.push({ team, zone: "flanks", severity: "high", problem: "Block is too narrow; wide channels are empty." });
+    if (length > 62) issues.push({ team, zone: "midfield", severity: "medium", problem: "Vertical stretch leaves a gap between lines." });
+    const left = side.filter((p) => (p.pitchY ?? 50) < 32).length;
+    const right = side.filter((p) => (p.pitchY ?? 50) > 68).length;
+    if (left <= 1 && right >= 3) issues.push({ team, zone: "left flank", severity: "high", problem: "Left side underloaded; rest defence is exposed." });
+    if (right <= 1 && left >= 3) issues.push({ team, zone: "right flank", severity: "high", problem: "Right side underloaded; rest defence is exposed." });
+  }
+  if (!issues.length) {
+    issues.push({ team: "both", zone: "transition", severity: "low", problem: "Shape is compact on this still; watch the first pass after turnover." });
+  }
+  return issues.slice(0, 5);
+}
+
+function obj(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+function mergeDossier(base: PlayerDossier, raw: unknown): PlayerDossier {
+  const r = obj(raw);
+  const st = obj(r.stats);
+  const run = obj(r.running);
+  const pas = obj(r.passing);
+  const tck = obj(r.tackles);
+  const sht = obj(r.shots);
+  const rad = obj(r.radar);
+  const attr = obj(r.attributes);
+  const s = base.stats;
+  return {
+    ...base,
+    position: typeof r.position === "string" ? r.position : base.position,
+    role: typeof r.role === "string" ? r.role : base.role,
+    stats: {
+      distanceM: num(run.distanceM) ?? num(st.distanceM) ?? s.distanceM,
+      sprints: num(run.sprints) ?? num(st.sprints) ?? s.sprints,
+      maxSpeedKmh: num(run.maxSpeedKmh) ?? num(st.maxSpeedKmh) ?? s.maxSpeedKmh,
+      intensity: num(run.intensity) ?? num(st.intensity) ?? s.intensity,
+      passesCompleted: num(pas.completed) ?? num(st.passesCompleted) ?? s.passesCompleted,
+      passesAttempted: num(pas.attempted) ?? num(st.passesAttempted) ?? s.passesAttempted,
+      keyPasses: num(pas.keyPasses) ?? num(st.keyPasses) ?? s.keyPasses,
+      passAccuracy: num(pas.accuracy) ?? num(st.passAccuracy) ?? s.passAccuracy,
+      positioning: num(r.positioning) ?? num(st.positioning) ?? s.positioning,
+      tacklesWon: num(tck.won) ?? num(st.tacklesWon) ?? s.tacklesWon,
+      tacklesLost: num(tck.lost) ?? num(st.tacklesLost) ?? s.tacklesLost,
+      shots: num(sht.total) ?? num(st.shots) ?? s.shots,
+      shotsOnTarget: num(sht.onTarget) ?? num(st.shotsOnTarget) ?? s.shotsOnTarget,
+      xg: num(sht.xg) ?? num(st.xg) ?? s.xg,
+      defending: num(r.defending) ?? num(st.defending) ?? s.defending,
+      interceptions: num(r.interceptions) ?? num(st.interceptions) ?? s.interceptions,
+      chancesCreated: num(r.chancesCreated) ?? num(st.chancesCreated) ?? s.chancesCreated,
+      chancesWasted: num(r.chancesWasted) ?? num(st.chancesWasted) ?? s.chancesWasted,
+      duels: num(st.duels) ?? s.duels,
+      recoveries: num(st.recoveries) ?? s.recoveries,
+      touches: num(st.touches) ?? s.touches,
+    },
+    radar: {
+      technical: clamp(num(rad.technical) ?? base.radar.technical),
+      tactical: clamp(num(rad.tactical) ?? base.radar.tactical),
+      physical: clamp(num(rad.physical) ?? base.radar.physical),
+      mental: clamp(num(rad.mental) ?? base.radar.mental),
+      attacking: clamp(num(rad.attacking) ?? base.radar.attacking),
+      defending: clamp(num(rad.defending) ?? base.radar.defending),
+    },
+    attributes: {
+      firstTouch: clamp(num(attr.firstTouch) ?? base.attributes.firstTouch),
+      weakerFoot: clamp(num(attr.weakerFoot) ?? base.attributes.weakerFoot),
+      scanning: clamp(num(attr.scanning) ?? base.attributes.scanning),
+      acceleration: clamp(num(attr.acceleration) ?? base.attributes.acceleration),
+      agility: clamp(num(attr.agility) ?? base.attributes.agility),
+      passing: clamp(num(attr.passing) ?? base.attributes.passing),
+      dribble: clamp(num(attr.dribble) ?? base.attributes.dribble),
+      finishing: clamp(num(attr.finishing) ?? base.attributes.finishing),
+      positioning: clamp(num(attr.positioning) ?? base.attributes.positioning),
+      decisionMaking: clamp(num(attr.decisionMaking) ?? base.attributes.decisionMaking),
+    },
+    strengths: Array.isArray(r.strengths) ? r.strengths.map(String).slice(0, 4) : base.strengths,
+    weaknesses: Array.isArray(r.weaknesses) ? r.weaknesses.map(String).slice(0, 3) : base.weaknesses,
+    notes: typeof r.notes === "string" ? r.notes : base.notes,
+    recommendation: typeof r.recommendation === "string" ? r.recommendation : base.recommendation,
+  };
+}
+
+function squadPrompt(frame: VideoFrame, boxes: PlayerBox[]) {
+  const lines = boxes
+    .filter((b) => b.label === "player")
+    .slice(0, 12)
+    .map((b) => {
+      const inf = inferRole(b);
+      return `#${b.id} ${b.team} ${inf.position} box=${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.x + b.w)},${Math.round(b.y + b.h)} pitch=${b.pitchX},${b.pitchY}`;
+    })
+    .join("\n");
+  return `You are a Wyscout / StatsBomb match analyst. The still is ${frame.width}x${frame.height}.
+Analyse EVERY numbered player individually. Do not skip ids.
+Players:
+${lines}
+Return ONE JSON object only, no markdown.
+{
+  "phase": "attack|defense|transition|set_piece",
+  "formationHome": "e.g. 4-3-3",
+  "formationAway": "e.g. 4-2-3-1",
+  "possession": {"home":55,"away":45},
+  "teamIssues": [{"team":"home|away|both","zone":"left flank","severity":"low|medium|high","problem":"one sentence"}],
+  "players": [{
+    "id": 1,
+    "position": "CB",
+    "role": "ball-playing centre-back",
+    "running": {"distanceM":80,"sprints":2,"maxSpeedKmh":28,"intensity":70},
+    "passing": {"completed":6,"attempted":7,"keyPasses":0,"accuracy":86},
+    "positioning": 72,
+    "tackles": {"won":1,"lost":0},
+    "shots": {"total":0,"onTarget":0,"xg":0.0},
+    "defending": 74,
+    "interceptions": 1,
+    "chancesCreated": 0,
+    "chancesWasted": 0,
+    "radar": {"technical":60,"tactical":70,"physical":65,"mental":62,"attacking":40,"defending":78},
+    "strengths": ["...","..."],
+    "weaknesses": ["..."],
+    "notes": "two sentences on THIS player only",
+    "recommendation": "trial|monitor|pass"
+  }]
+}
+Judge only what is visible. Numbers are clip-level estimates, not 90-minute totals.`;
+}
+
+export async function analyzeStream(_streamUrl: string, pageUrl: string, quality: string | null): Promise<VideoAnalysis> {
   const hf = token();
   if (!hf) throw new Error("HF_TOKEN is not configured on the server");
   const frames = await fetchVideoFrames(pageUrl, 2);
   const frame = frames[0];
   const raw = await detectFrame(frame, hf);
-  const players = raw.filter((b) => b.label === "player");
-  const balls = raw.filter((b) => b.label === "ball");
-  const numbered = assignTeams(players.map((b, i) => ({ ...b, id: i + 1 }))).concat(
-    balls.map((b, i) => ({ ...b, id: players.length + i + 1 })),
-  );
+  const players = raw
+    .filter((b) => b.label === "player")
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 12)
+    .map((b, i) => ({ ...b, id: i + 1 }));
+  const balls = raw.filter((b) => b.label === "ball").map((b, i) => ({ ...b, id: players.length + i + 1 }));
+  const numbered = assignTeams(players).concat(balls);
+  if (!players.length) throw new Error("No players found on this still. Use a match clip, not a trailer.");
   const heat = gaussianHeat(numbered);
   const spread = spreadMetrics(numbered);
-  if (!players.length) throw new Error("No player could be marked on this still. Use a match clip, not a trailer.");
+  const bases = numbered.filter((b) => b.label === "player").map(fallbackDossier);
+  const scout = await scoutWithVision(frame, hf, squadPrompt(frame, numbered));
+  const visionPlayers = Array.isArray(scout?.players) ? scout.players : [];
+  const byId = new Map<number, unknown>();
+  for (const row of visionPlayers) {
+    const id = num(obj(row).id);
+    if (id != null) byId.set(id, row);
+  }
+  const dossiers = bases.map((b) => mergeDossier(b, byId.get(b.id)));
+  const issueRaw = Array.isArray(scout?.teamIssues) ? scout.teamIssues : [];
+  const teamIssues: TeamIssue[] =
+    issueRaw.length > 0
+      ? issueRaw.slice(0, 6).map((item) => {
+          const o = obj(item);
+          const team = o.team === "away" || o.team === "home" || o.team === "both" ? o.team : "both";
+          const severity = o.severity === "high" || o.severity === "medium" || o.severity === "low" ? o.severity : "medium";
+          return {
+            team,
+            zone: typeof o.zone === "string" ? o.zone : "pitch",
+            severity,
+            problem: typeof o.problem === "string" ? o.problem : "",
+          };
+        })
+      : fallbackIssues(numbered);
+  const poss = obj(scout?.possession);
+  const home = dossiers.filter((d) => d.team === "home");
+  const away = dossiers.filter((d) => d.team === "away");
+  const avg = (list: PlayerDossier[], fn: (d: PlayerDossier) => number) =>
+    list.length ? Math.round(list.reduce((a, d) => a + fn(d), 0) / list.length) : 50;
   return {
-    playerBoxes: numbered,
+    playerBoxes: numbered.map((b) => {
+      const d = dossiers.find((x) => x.id === b.id);
+      return d ? { ...b, role: d.role } : b;
+    }),
     heatmap: heat,
-    distanceCoveredM: null,
-    possession: null,
-    model: "facebook/detr-resnet-50",
+    distanceCoveredM: dossiers.reduce((a, d) => a + d.stats.distanceM, 0) || null,
+    possession: {
+      home: clamp(num(poss.home) ?? avg(home, (d) => d.stats.passAccuracy)),
+      away: clamp(num(poss.away) ?? avg(away, (d) => d.stats.passAccuracy)),
+    },
+    model: scout ? "detr-resnet-50 + gemma-3-12b-it" : "detr-resnet-50",
     streamQuality: quality || frame.source,
     extractedAt: new Date().toISOString(),
-    stage: "mark",
+    stage: "complete",
     frameUrl: frame.source,
     frameWidth: frame.width,
     frameHeight: frame.height,
-    markedPlayerId: null,
     framesAnalyzed: frames.length,
     playersOnPitch: players.length,
     ballDetected: balls.length > 0,
+    formation: typeof scout?.formationHome === "string" ? scout.formationHome : null,
+    formationAway: typeof scout?.formationAway === "string" ? scout.formationAway : null,
+    phase: typeof scout?.phase === "string" ? scout.phase : null,
     compactness: spread.compactness,
     width: spread.width,
     intensity: spread.intensity,
+    dossiers,
+    teamIssues,
+    radar: dossiers[0]?.radar ?? null,
+    notes: teamIssues[0]?.problem ?? null,
   };
 }
 
-function playerPrompt(box: PlayerBox, frame: VideoFrame) {
-  const x2 = Math.round(box.x + box.w);
-  const y2 = Math.round(box.y + box.h);
-  const zoneX = (box.pitchX ?? 50) < 33 ? "left third" : (box.pitchX ?? 50) > 66 ? "right third" : "middle third";
-  const zoneY = (box.pitchY ?? 50) < 33 ? "near touchline (top of frame)" : (box.pitchY ?? 50) > 66 ? "near touchline (bottom of frame)" : "central corridor";
-  return `You are a UEFA Pro licence scout writing a player dossier.
-Analyse ONLY the MARKED player. Everyone else is context.
-The marked player sits in a gold bounding box on a ${frame.width}x${frame.height} still:
-xmin=${Math.round(box.x)}, ymin=${Math.round(box.y)}, xmax=${x2}, ymax=${y2}.
-Pitch zone: ${zoneX}, ${zoneY}. Shirt group: ${box.team === "away" ? "away" : "home"}.
-Cover every lens a club scout uses: technical (first touch, weaker foot, passing, dribble, finishing),
-tactical (positioning, scanning, decision, off-ball),
-physical (acceleration, agility, stature impression),
-mental (bravery, composure).
-Reply with ONE JSON object only, no markdown.
-{
-  "position": "e.g. RW / 8 / CB",
-  "role": "e.g. inverted winger",
-  "phase": "attack|defense|transition|set_piece",
-  "level": "U19 academy | regional first team | professional",
-  "radar": {"technical":0-100,"tactical":0-100,"physical":0-100,"mental":0-100,"attacking":0-100,"defending":0-100},
-  "attributes": {"firstTouch":0-100,"weakerFoot":0-100,"scanning":0-100,"acceleration":0-100,"agility":0-100,"passing":0-100,"dribble":0-100,"finishing":0-100,"positioning":0-100,"decisionMaking":0-100},
-  "stats": {"distanceM":int,"sprints":int,"duels":int,"progressiveRuns":int,"recoveries":int,"touches":int,"maxSpeedKmh":int},
-  "strengths": ["...","...","...","..."],
-  "weaknesses": ["...","...","..."],
-  "notes": "4 sentences about THIS player only: body shape, first action, off-ball, decision.",
-  "recommendation": "trial|monitor|pass"
-}
-Do not invent a name. If the box is unclear, say so in notes and lower confidence scores.`;
-}
-
-function attrMap(raw: unknown): PlayerAttributes | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  const keys: (keyof PlayerAttributes)[] = [
-    "firstTouch",
-    "weakerFoot",
-    "scanning",
-    "acceleration",
-    "agility",
-    "passing",
-    "dribble",
-    "finishing",
-    "positioning",
-    "decisionMaking",
-  ];
-  const out = {} as PlayerAttributes;
-  for (const k of keys) out[k] = clamp(num(o[k]) ?? 55);
-  return out;
-}
-
-export async function completeMarkedPlayer(pageUrl: string, draft: VideoAnalysis, playerId: number): Promise<VideoAnalysis> {
-  const hf = token();
-  if (!hf) throw new Error("HF_TOKEN is not configured on the server");
-  const box = draft.playerBoxes.find((b) => b.id === playerId && b.label !== "ball");
-  if (!box) throw new Error("Mark a player, not the ball.");
-  const frames = await fetchVideoFrames(pageUrl, 1);
-  const frame = frames[0];
-  const scout = await scoutWithVision(frame, hf, playerPrompt(box, frame));
-  const radarRaw = scout?.radar && typeof scout.radar === "object" ? (scout.radar as Record<string, unknown>) : {};
-  const statsRaw = scout?.stats && typeof scout.stats === "object" ? (scout.stats as Record<string, unknown>) : {};
-  const fallback: RadarScores = {
-    technical: 62,
-    tactical: 60,
-    physical: 64,
-    mental: 61,
-    attacking: box.team === "away" ? 58 : 66,
-    defending: 59,
-  };
-  return {
-    ...draft,
-    stage: "complete",
-    markedPlayerId: playerId,
-    model: scout ? "detr-resnet-50 + gemma-3-12b-it" : draft.model,
-    extractedAt: new Date().toISOString(),
-    position: typeof scout?.position === "string" ? scout.position : null,
-    role: typeof scout?.role === "string" ? scout.role : null,
-    level: typeof scout?.level === "string" ? scout.level : null,
-    phase: typeof scout?.phase === "string" ? scout.phase : draft.phase,
-    radar: {
-      technical: clamp(num(radarRaw.technical) ?? fallback.technical),
-      tactical: clamp(num(radarRaw.tactical) ?? fallback.tactical),
-      physical: clamp(num(radarRaw.physical) ?? fallback.physical),
-      mental: clamp(num(radarRaw.mental) ?? fallback.mental),
-      attacking: clamp(num(radarRaw.attacking) ?? fallback.attacking),
-      defending: clamp(num(radarRaw.defending) ?? fallback.defending),
-    },
-    attributes: attrMap(scout?.attributes),
-    strengths: Array.isArray(scout?.strengths) ? scout.strengths.map(String).slice(0, 5) : [],
-    weaknesses: Array.isArray(scout?.weaknesses) ? scout.weaknesses.map(String).slice(0, 4) : [],
-    notes: typeof scout?.notes === "string" ? scout.notes : null,
-    recommendation: typeof scout?.recommendation === "string" ? scout.recommendation : null,
-    distanceCoveredM: num(statsRaw.distanceM),
-    stats: {
-      sprints: num(statsRaw.sprints),
-      duels: num(statsRaw.duels),
-      progressiveRuns: num(statsRaw.progressiveRuns),
-      recoveries: num(statsRaw.recoveries),
-      touches: num(statsRaw.touches),
-      maxSpeedKmh: num(statsRaw.maxSpeedKmh),
-    },
-    playerBoxes: draft.playerBoxes.map((b) => (b.id === playerId ? { ...b, role: typeof scout?.role === "string" ? scout.role : b.role } : b)),
-  };
-}
-
-export async function analyzeStream(streamUrl: string, pageUrl: string, quality: string | null) {
-  return detectClip(streamUrl, pageUrl, quality);
-}

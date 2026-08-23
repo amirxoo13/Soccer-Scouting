@@ -122,10 +122,10 @@ async function processJob(job: {
     const analysis = await analyzeStream(streamUrl, job.video_url, quality);
     await sql`
       update video_analysis_jobs
-      set status = 'awaiting_mark', last_error = null, updated_at = now()
+      set status = 'analyzed', last_error = null, updated_at = now()
       where id = ${job.id}
     `;
-    await setVideoStatus(job.video_id, "awaiting_mark", { json: analysis, error: null });
+    await setVideoStatus(job.video_id, "analyzed", { json: analysis, error: null });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[analysis] failed", job.id, message);
@@ -179,30 +179,4 @@ export async function enqueueJob(userId: string, videoId: number, videoUrl: stri
   return { jobId: job.id, status: (fresh?.status ?? "queued") as AnalysisStatus };
 }
 
-export async function markPlayer(userId: string, videoId: number, playerId: number) {
-  const sql = await getSql();
-  const [row] = await sql<{
-    youtube_url: string;
-    analysis_json: unknown;
-    analysis_status: string;
-  }>`
-    select v.youtube_url, v.analysis_json, v.analysis_status
-    from player_videos v
-    join player_profiles p on p.id = v.profile_id
-    where v.id = ${videoId} and p.user_id = ${userId}
-  `;
-  if (!row) throw new Error("Video not found");
-  const draft = (row.analysis_json ?? null) as VideoAnalysis | null;
-  if (!draft?.playerBoxes?.length) throw new Error("Detect players first, then mark one.");
-  await setVideoStatus(videoId, "running");
-  try {
-    const { completeMarkedPlayer } = await import("./hf-football");
-    const analysis = await completeMarkedPlayer(row.youtube_url, draft, playerId);
-    await setVideoStatus(videoId, "analyzed", { json: analysis, error: null });
-    return analysis;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await setVideoStatus(videoId, "awaiting_mark", { json: draft, error: message });
-    throw err;
-  }
-}
+
