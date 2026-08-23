@@ -222,16 +222,20 @@ function PlayerReport({ player }: { player: PlayerDossier }) {
 
 function Result({ data }: { data: VideoAnalysis }) {
   const { t } = useI18n();
-  const dossiers = data.dossiers ?? [];
-  const issues = (data.teamIssues ?? []).filter((issue) => {
-    if (isUselessIssue(issue.problem, issue.zone)) return false;
-    const blob = `${issue.zone} ${issue.problem}`.toLowerCase();
-    if (blob.includes("too tight") || blob.includes("wide match") || blob.includes("frame")) return false;
-    return true;
-  });
-  if (!dossiers.length) return null;
+  const dossiers = useMemo(() => data.dossiers ?? [], [data.dossiers]);
+  const issues = useMemo(
+    () =>
+      (data.teamIssues ?? []).filter((issue) => {
+        if (isUselessIssue(issue.problem, issue.zone)) return false;
+        const blob = `${issue.zone} ${issue.problem}`.toLowerCase();
+        if (blob.includes("too tight") || blob.includes("wide match") || blob.includes("frame")) return false;
+        return true;
+      }),
+    [data.teamIssues],
+  );
   const [selectedId, setSelectedId] = useState<number>(dossiers[0]?.id ?? data.playerBoxes.find((b) => b.label === "player")?.id ?? 1);
   const selected = useMemo(() => dossiers.find((d) => d.id === selectedId) ?? dossiers[0], [dossiers, selectedId]);
+  if (!dossiers.length) return null;
   return (
     <div className="mt-4 grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -346,11 +350,12 @@ export function AnalysisPanel({
   const pending = isPendingStatus(status) || run.isPending;
   const ready = Boolean(analysis?.dossiers?.length) && !blocked && (status === "analyzed" || status === "awaiting_mark");
 
+  const analyze = run.mutate;
   useEffect(() => {
     if (!canRun || !videoId || pending || !blocked) return;
     if (status === "failed" || status === "extraction_failed") return;
-    run.mutate();
-  }, [blocked, canRun, pending, status, videoId]);
+    analyze();
+  }, [analyze, blocked, canRun, pending, status, videoId]);
 
   return (
     <div className="mt-3 rounded-xl border border-border bg-background/70 p-4">
