@@ -147,7 +147,29 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function PlayerReport({ player }: { player: PlayerDossier }) {
   const { t } = useI18n();
-  const s = player.stats;
+  const s = player.stats ?? {
+    distanceM: 0,
+    sprints: 0,
+    maxSpeedKmh: 0,
+    intensity: 0,
+    passesCompleted: 0,
+    passesAttempted: 0,
+    keyPasses: 0,
+    passAccuracy: 0,
+    positioning: 0,
+    tacklesWon: 0,
+    tacklesLost: 0,
+    shots: 0,
+    shotsOnTarget: 0,
+    xg: 0,
+    defending: 0,
+    interceptions: 0,
+    chancesCreated: 0,
+    chancesWasted: 0,
+    duels: 0,
+    recoveries: 0,
+    touches: 0,
+  };
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">

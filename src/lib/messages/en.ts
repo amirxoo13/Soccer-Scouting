@@ -372,7 +372,7 @@ export const en = {
     notes: "Scout notes",
     strengths: "Strengths",
     weaknesses: "Areas to improve",
-    disclaimer: "Clip-level estimates from stills and a scout vision model. Not Opta 90-minute tracking.",
+    disclaimer: "This is a still-frame scout read, not Opta or Wyscout 90-minute tracking.",
     status: {
       idle: "Not analysed",
       queued: "Queued",
